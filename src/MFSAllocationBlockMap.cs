@@ -79,14 +79,17 @@ public struct MFSAllocationBlockMap
             if (i % 2 == 0)
             {
                 // Even entry - starts at the current byte.
-                // Take the first 12 bits.
+                // Takes 12 bits: all 8 bits of byte1 and the high 4 bits of byte2.
                 entries[i] = (ushort)((byte1 << 4) | ((byte2 >> 4) & 0x0F));
             }
             else
             {
                 // Odd entry - starts at the high nibble of the current byte.
-                // Take the last 4 bits of this byte and the next byte.
+                // Takes 12 bits: the low 4 bits of byte1 and all 8 bits of byte2.
                 entries[i] = (ushort)(((byte1 & 0x0F) << 8) | byte2);
+
+                // Move to the next byte after reading an odd entry.
+                currentOffsetInBlock++;
             }
         }
 
