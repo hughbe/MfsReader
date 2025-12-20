@@ -6,6 +6,8 @@ public class MfsVolumeTests
 {
     [Theory]
     [InlineData("mfs400K.dsk")]
+    [InlineData("mfs800K.dsk")]
+    [InlineData("mfs1440K.dsk")]
     public void Ctor_Stream(string diskName)
     {
         var filePath = Path.Combine("Samples", diskName);
