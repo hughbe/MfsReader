@@ -142,6 +142,33 @@ Run tests:
 dotnet test
 ```
 
+## MFSDumper CLI
+
+Extract an MFS disk image to a directory using the dumper tool.
+
+### Install/Build
+
+```sh
+dotnet build dumper/MFSDumper.csproj -c Release
+```
+
+### Usage
+
+```sh
+MFSDumper \
+    /path/to/disk.dsk \
+    -o /path/to/output \
+    [--data-only | --resource-only]
+```
+
+- Input: Path to the `.dsk` image.
+- Output: Destination directory for extracted files.
+- Fork selection:
+    - `--data-only`: Extract only data forks.
+    - `--resource-only`: Extract only resource forks.
+
+Files are written as `<Name>.data` and `<Name>.res`, with `/` and `:` replaced by `_` for compatibility.
+
 ## Requirements
 
 - .NET 9.0 or later

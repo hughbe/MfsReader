@@ -118,8 +118,11 @@ public struct MFSFileDirectoryBlock
 
         int offset = 0;
 
-        // fIFIags (byte) bit 7 = 1 if entry U3ed; bit 0 = 1 if file locked
-        // Flags. Bit 7 is always set in a directory entry; when clear, it indicates empty space with no further directory entries in this block. Bit 0 is set if the file is locked. Other bits are unknown.
+        // fIFIags (byte) bit 7 = 1 if entry used; bit 0 = 1 if file locked
+        // Flags. Bit 7 is always set in a directory entry; when clear,
+        // it indicates empty space with no further directory entries
+        // in this block. Bit 0 is set if the file is locked. Other
+        // bits are unknown.
         Flags = (MFSFileDirectoryBlockFlags)data[offset];
         offset += 1;
 

@@ -11,6 +11,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MfsReader.Tests", "tests\MfsReader.Tests.csproj", "{D868E9DB-7BED-47CC-9D79-5FAEC94A047F}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dumper", "dumper", "{6A12E86D-DB6E-91B4-263F-3EB1B9A58A55}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MFSDumper", "dumper\MFSDumper.csproj", "{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +49,18 @@ Global
 		{D868E9DB-7BED-47CC-9D79-5FAEC94A047F}.Release|x64.Build.0 = Release|Any CPU
 		{D868E9DB-7BED-47CC-9D79-5FAEC94A047F}.Release|x86.ActiveCfg = Release|Any CPU
 		{D868E9DB-7BED-47CC-9D79-5FAEC94A047F}.Release|x86.Build.0 = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|x64.Build.0 = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Debug|x86.Build.0 = Debug|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|x64.ActiveCfg = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|x64.Build.0 = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|x86.ActiveCfg = Release|Any CPU
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -52,5 +68,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{215B228D-6650-48BC-85FC-CEC3E594C77A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{D868E9DB-7BED-47CC-9D79-5FAEC94A047F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{A9B39030-B80D-4FDE-A1C1-A43242D6DACE} = {6A12E86D-DB6E-91B4-263F-3EB1B9A58A55}
 	EndGlobalSection
 EndGlobal
