@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.Buffers;
 
 namespace MfsReader;
 
@@ -22,8 +22,6 @@ public struct MFSAllocationBlockMap
     {
         // The data for the allocation block map starts immediately
         // after the volume information in the master directory block.
-        int currentBlock = 0;
-        int currentOffsetInBlock = MFSMasterDirectoryBlock.Size;
 
         // From https://www.weihenstephan.org/~michaste/pagetable/mac/Inside_Macintosh.pdf
         // "The volume allocation block map represents every allocation
@@ -36,64 +34,90 @@ public struct MFSAllocationBlockMap
         // blocks. Each entry specifies whether the block is unused,
         // whether it's the last block in the file, or which allocation
         // block is next in the file"
-        Span<byte> blockBuffer = stackalloc byte[512];
-        byte GetByte(Span<byte> initialData, Span<byte> blockBuffer, long offset)
+        
+        // Read all allocation block map data into a contiguous buffer.
+        // The map spans multiple 512-byte logical blocks starting from the MDB.
+        // Calculate total bytes needed: 1.5 bytes per entry (12 bits each)
+        int numEntries = volume.MasterDirectoryBlock.NumberOfAllocationBlocks;
+        int totalBytesNeeded = (numEntries * 3 + 1) / 2; // Round up for 12-bit entries
+        
+        // The allocation map starts at offset 64 within the MDB block.
+        // First, copy the remaining bytes from the initial MDB block (offsets 64-511).
+        int bytesFromMdb = initialData.Length - MFSMasterDirectoryBlock.Size;
+        int bytesCopied = Math.Min(bytesFromMdb, totalBytesNeeded);
+        
+        // Use ArrayPool for the temporary buffer to avoid heap allocation
+        byte[]? rentedBuffer = null;
+        Span<byte> allocationMapData = totalBytesNeeded <= 1024
+            ? stackalloc byte[totalBytesNeeded]
+            : (rentedBuffer = ArrayPool<byte>.Shared.Rent(totalBytesNeeded)).AsSpan(0, totalBytesNeeded);
+        
+        try
         {
-            if (currentBlock == 0)
+            initialData.Slice(MFSMasterDirectoryBlock.Size, bytesCopied).CopyTo(allocationMapData);
+            
+            // Read additional blocks if needed
+            int bytesRemaining = totalBytesNeeded - bytesCopied;
+            int destOffset = bytesCopied;
+            int blockIndex = 1; // Next block after MDB
+            Span<byte> blockBuffer = stackalloc byte[512];
+            
+            while (bytesRemaining > 0)
             {
-                if (offset < initialData.Length)
+                volume.Stream.Seek(
+                    volume.StreamStartOffset + MFSVolume.MasterDirectoryBlockOffset + blockIndex * 512,
+                    SeekOrigin.Begin);
+                
+                if (volume.Stream.Read(blockBuffer) != blockBuffer.Length)
                 {
-                    return initialData[(int)offset];
+                    throw new InvalidDataException("Unable to read DSK allocation block map.");
+                }
+                
+                int bytesToCopy = Math.Min(512, bytesRemaining);
+                blockBuffer.Slice(0, bytesToCopy).CopyTo(allocationMapData.Slice(destOffset));
+                
+                destOffset += bytesToCopy;
+                bytesRemaining -= bytesToCopy;
+                blockIndex++;
+            }
+            
+            // Now parse the contiguous allocation map data
+            var entries = new ushort[numEntries + 2];
+            int byteOffset = 0;
+            
+            for (int i = 2; i < entries.Length; i++)
+            {
+                byte byte1 = allocationMapData[byteOffset];
+                byte byte2 = allocationMapData[byteOffset + 1];
+
+                // Each entry is 12 bits.
+                if (i % 2 == 0)
+                {
+                    // Even entry - starts at the current byte.
+                    // Takes 12 bits: all 8 bits of byte1 and the high 4 bits of byte2.
+                    entries[i] = (ushort)((byte1 << 4) | ((byte2 >> 4) & 0x0F));
+                    byteOffset++;
+                }
+                else
+                {
+                    // Odd entry - starts at the high nibble of the current byte.
+                    // Takes 12 bits: the low 4 bits of byte1 and all 8 bits of byte2.
+                    entries[i] = (ushort)(((byte1 & 0x0F) << 8) | byte2);
+
+                    // Move past both bytes after reading an odd entry.
+                    byteOffset += 2;
                 }
             }
-            else
-            {
-                if (offset < blockBuffer.Length)
-                {
-                    return blockBuffer[(int)offset];
-                }
-            }
 
-            // Read the next block from the stream.
-            currentBlock++;
-            currentOffsetInBlock = 0;
-            volume.Stream.Seek(
-                volume.StreamStartOffset + MFSVolume.MasterDirectoryBlockOffset + currentBlock * 512,
-                SeekOrigin.Begin);
-            if (volume.Stream.Read(blockBuffer) != blockBuffer.Length)
-            {
-                throw new InvalidDataException("Unable to read DSK allocation block map.");
-            }
-
-            return blockBuffer[currentOffsetInBlock++];
+            Entries = entries;
         }
-
-        var entries = new ushort[volume.MasterDirectoryBlock.NumberOfAllocationBlocks + 2];
-        for (int i = 2; i < entries.Length; i++)
+        finally
         {
-            var offset = currentOffsetInBlock;
-            var byte1 = GetByte(initialData, blockBuffer, currentOffsetInBlock++);
-            var byte2 = GetByte(initialData, blockBuffer, currentOffsetInBlock);
-
-            // Each entry is 12 bits.
-            if (i % 2 == 0)
+            if (rentedBuffer != null)
             {
-                // Even entry - starts at the current byte.
-                // Takes 12 bits: all 8 bits of byte1 and the high 4 bits of byte2.
-                entries[i] = (ushort)((byte1 << 4) | ((byte2 >> 4) & 0x0F));
-            }
-            else
-            {
-                // Odd entry - starts at the high nibble of the current byte.
-                // Takes 12 bits: the low 4 bits of byte1 and all 8 bits of byte2.
-                entries[i] = (ushort)(((byte1 & 0x0F) << 8) | byte2);
-
-                // Move to the next byte after reading an odd entry.
-                currentOffsetInBlock++;
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
         }
-
-        Entries = entries;
     }
 
     /// <summary>

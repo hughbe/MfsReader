@@ -68,6 +68,12 @@ public class MFSVolume
         // "The first allocation block on a volume typically follows the file
         // directory. It's numbered 2 because of the special meaning of numbers
         // 0 and 1."
+        // The allocation blocks start at AllocationBlockStart (in sectors), and allocation
+        // block 2 is the first block. So to find allocation block N, we calculate:
+        // offset = (AllocationBlockStart * 512) + ((N - 2) * AllocationBlockSize)
+        // Which can be rewritten as:
+        // offset = (AllocationBlockStart * 512) - (2 * AllocationBlockSize) + (N * AllocationBlockSize)
+        // So _allocationBlockStartOffset is the base, and we add (N * AllocationBlockSize)
         _allocationBlockStartOffset = StreamStartOffset + MasterDirectoryBlock.AllocationBlockStart * 512 - 2 * MasterDirectoryBlock.AllocationBlockSize;
     }
 
@@ -179,6 +185,12 @@ public class MFSVolume
             // and the file directory blocks.
             long offset = _allocationBlockStartOffset + (allocationBlock * (long)MasterDirectoryBlock.AllocationBlockSize);
 
+            // Validate that the offset is within the stream bounds
+            if (offset < 0 || offset >= Stream.Length)
+            {
+                throw new InvalidDataException($"Allocation block {allocationBlock} points to an offset ({offset}) outside the valid stream range (0-{Stream.Length}).");
+            }
+
             Stream.Seek(offset, SeekOrigin.Begin);
 
             // Read the allocation block data.            
@@ -192,7 +204,13 @@ public class MFSVolume
             totalBytesRead += bytesToRead;
             remainingBytes -= (uint)bytesToRead;
 
-            allocationBlock = AllocationBlockMap.GetNextAllocationBlock(allocationBlock);
+            ushort nextBlock = AllocationBlockMap.GetNextAllocationBlock(allocationBlock);
+            if (nextBlock == 0xFFF || nextBlock == 0)
+            {
+                // End of file or unused - we're done
+                break;
+            }
+            allocationBlock = nextBlock;
         }
 
         return totalBytesRead;

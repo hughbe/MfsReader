@@ -136,12 +136,14 @@ public struct MFSFileDirectoryBlock
 
         offset += 1;
 
-        // flUsrWds (16 byte3) information U3ed by the Finder
-        // File type. This is often (but not always) a readable 4-character string. When the type is unknown, it should be set to 0x3F3F3F3F.
+        // flUsrWds (16 bytes) information used by the Finder
+        // File type. This is often (but not always) a readable 4-character string.
+        // When the type is unknown, it should be set to 0x3F3F3F3F.
         FileType = Encoding.ASCII.GetString(data.Slice(offset, 4));
         offset += 4;
 
-        // File creator. This is often (but not always) a readable 4-character string. When the appropriate application to open the file is unknown, it should be set to 0x3F3F3F3F.
+        // File creator. This is often (but not always) a readable 4-character string.
+        // When the appropriate application to open the file is unknown, it should be set to 0x3F3F3F3F.
         Creator = Encoding.ASCII.GetString(data.Slice(offset, 4));
         offset += 4;
 
@@ -174,7 +176,8 @@ public struct MFSFileDirectoryBlock
         offset += 4;
 
         // fIStBlk (word) first allocation block of data fork
-        // First data fork allocation block. If the data fork has no allocation blocks, this should be 0.
+        // First data fork allocation block. If the data fork has no
+        // allocation blocks, this should be 0.
         DataForkAllocationBlock = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
 
@@ -184,22 +187,27 @@ public struct MFSFileDirectoryBlock
         offset += 4;
 
         // flPyLen (long word) physical end-of-file of data fork 
-        // Data fork allocated space, in bytes. This is the total size of all the allocation blocks belonging to the data fork, including any space that isn't used.
+        // Data fork allocated space, in bytes. This is the total size
+        // of all the allocation blocks belonging to the data fork,
+        // including any space that isn't used.
         DataForkAllocatedSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
 
         // fIRStBlk (word) first allocation block of resource fork
-        // First resource fork allocation block. If the resource fork has no allocation blocks, this should be 0.
+        // First resource fork allocation block. If the resource fork
+        // has no allocation blocks, this should be 0.
         ResourceForkAllocationBlock = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
 
-        // Resource fork size, in bytes.
         // fIRLgLen (long word) logical end-of-file of resource fork 
+        // Resource fork size, in bytes.
         ResourceForkSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
 
-        // Resource fork allocated space, in bytes. This is the total size of all the allocation blocks belonging to the resource fork, including any space that isn't used.
         // fIRPyLen (long word) physical end-of-file of resource fork 
+        // Resource fork allocated space, in bytes. This is the total
+        // size of all the allocation blocks belonging to the resource
+        // fork, including any space that isn't used.
         ResourceForkAllocatedSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
 
