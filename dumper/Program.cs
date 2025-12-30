@@ -23,7 +23,7 @@ sealed class ExtractSettings : CommandSettings
     public required string Input { get; init; }
 
     [CommandOption("-o|--output")]
-    public required string Output { get; init; }
+    public string? Output { get; init; }
 
     [CommandOption("--data-only")]
     public bool DataOnly { get; init; }
@@ -43,7 +43,8 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
             return -1;
         }
 
-        var outputDir = new DirectoryInfo(settings.Output);
+        var outputPath = settings.Output ?? Path.GetFileNameWithoutExtension(input.Name);
+        var outputDir = new DirectoryInfo(outputPath);
         if (!outputDir.Exists)
         {
             outputDir.Create();
