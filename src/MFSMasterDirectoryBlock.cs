@@ -105,7 +105,12 @@ public struct MFSMasterDirectoryBlock
         offset += 2;
         if (Signature != 0xD2D7) // MFS signature
         {
-            throw new ArgumentException("Invalid MFS master directory block signature.", nameof(data));
+            if (Signature == 0x4244) // 'BD' - HFS signature
+            {
+                throw new InvalidDataException("The provided data appears to be an HFS volume, not MFS.");
+            }
+
+            throw new InvalidDataException($"Invalid MFS master directory block signature.");
         }
 
         // drCrDate (long word) date and time of initialization

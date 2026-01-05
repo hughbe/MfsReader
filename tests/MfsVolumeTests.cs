@@ -35,6 +35,14 @@ public class MfsVolumeTests
         Assert.Throws<ArgumentNullException>("stream", () => new MFSVolume(null!));
     }
 
+    [Fact]
+    public void Ctor_HfsStream_ThrowsInvalidDataException()
+    {
+        var filePath = Path.Combine("Samples", "hfs", "hfs400K.dsk");
+        using var stream = File.OpenRead(filePath);
+        Assert.Throws<InvalidDataException>(() => new MFSVolume(stream));
+    }
+
     private static void ExportFile(MFSVolume volume, MFSFileDirectoryBlock entry, string path)
     {
         // Ensure the output directory exists
