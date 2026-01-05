@@ -58,7 +58,7 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
 
         foreach (var entry in entries)
         {
-            var safeName = entry.Name.Replace("/", "_").Replace(":", "_");
+            var safeName = SanitizeName(entry.Name);
             var basePath = Path.Combine(outputDir.FullName, safeName);
 
             bool extractData = !settings.ResourceOnly && entry.DataForkSize != 0;
@@ -104,5 +104,16 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         {
             // Ignore timestamp errors
         }
+    }
+
+    private static string SanitizeName(string name)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var invalidChar in invalidChars)
+        {
+            name = name.Replace(invalidChar, '_');
+        }
+
+        return name;
     }
 }

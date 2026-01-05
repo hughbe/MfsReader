@@ -41,7 +41,7 @@ public class MfsVolumeTests
         Directory.CreateDirectory(path);
 
         // Sanitize file names for filesystem compatibility
-        var safeName = entry.Name.Replace("/", "_").Replace(":", "_");
+        var safeName = SanitizeName(entry.Name);
         var filePath = Path.Combine(path, safeName);
         
         if (entry.DataForkSize != 0)
@@ -55,5 +55,16 @@ public class MfsVolumeTests
             using var outputStream = File.Create(filePath + ".res");
             volume.GetFileData(entry, outputStream, true);
         }
+    }
+
+    private static string SanitizeName(string name)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var invalidChar in invalidChars)
+        {
+            name = name.Replace(invalidChar, '_');
+        }
+
+        return name;
     }
 }
