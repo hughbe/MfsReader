@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.VisualBasic;
 
 namespace MfsReader.Utilities;
 
@@ -10,19 +11,27 @@ namespace MfsReader.Utilities;
 internal static class SpanUtilities
 {
     /// <summary>
-    /// Reads a fixed-length ASCII string with a length prefix from the specified span.
+    /// Reads a Pascal-style string from the given span.
     /// </summary>
-    /// <param name="data">The span containing the data.</param>
-    /// <returns>The decoded string.</returns>
-    public static string ReadPascalString(ReadOnlySpan<byte> data)
+    /// <param name="data">The span containing the Pascal string.</param>
+    /// <param name="bytesRead">Outputs the total number of bytes read from the span.</param>
+    /// <returns>The extracted string.</returns>
+    /// <exception cref="ArgumentException">Thrown when the data is too short to contain the specified Pascal string.</exception>
+    public static string ReadPascalString(ReadOnlySpan<byte> data, out int bytesRead)
     {
-        Debug.Assert(data.Length > 0, "Data span must contain at least one byte for the length.");
+        if (data.Length < 1)
+        {
+            throw new ArgumentException("Data is too short to contain a Pascal string length.", nameof(data));
+        }
 
-        // There is one extra byte for the length.
-        var actualLength = data[0];
+        var strLength = data[0];
+        if (1 + strLength > data.Length)
+        {
+            throw new ArgumentException("Data is too short to contain the specified Pascal string.", nameof(data));
+        }
 
-        // Read the string bytes for the fixed length.
-        return Encoding.ASCII.GetString(data.Slice(1, Math.Min(actualLength, data.Length - 1)));
+        bytesRead = 1 + strLength;
+        return Encoding.ASCII.GetString(data.Slice(1, strLength));
     }
 
     /// <summary>

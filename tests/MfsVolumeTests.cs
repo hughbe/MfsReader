@@ -55,13 +55,13 @@ public class MfsVolumeTests
         if (entry.DataForkSize != 0)
         {
             using var outputStream = File.Create(filePath + ".data");
-            volume.GetFileData(entry, outputStream, false);
+            volume.GetFileData(entry, outputStream, MFSForkType.DataFork);
         }
 
         if (entry.ResourceForkSize != 0)
         {
             using var outputStream = File.Create(filePath + ".res");
-            volume.GetFileData(entry, outputStream, true);
+            volume.GetFileData(entry, outputStream, MFSForkType.ResourceFork);
         }
     }
 

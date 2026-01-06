@@ -74,7 +74,7 @@ public struct MFSAllocationBlockMap
                 }
                 
                 int bytesToCopy = Math.Min(512, bytesRemaining);
-                blockBuffer.Slice(0, bytesToCopy).CopyTo(allocationMapData.Slice(destOffset));
+                blockBuffer[..bytesToCopy].CopyTo(allocationMapData[destOffset..]);
                 
                 destOffset += bytesToCopy;
                 bytesRemaining -= bytesToCopy;

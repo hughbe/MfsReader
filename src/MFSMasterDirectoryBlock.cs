@@ -90,11 +90,12 @@ public struct MFSMasterDirectoryBlock
     /// Initializes a new instance of the <see cref="MFSMasterDirectoryBlock"/> struct from the given data.
     /// </summary>
     /// <param name="data">The span containing the master directory block data.</param>
+    /// <exception cref="ArgumentException">Thrown when the provided data is not the correct size.</exception>
     public MFSMasterDirectoryBlock(Span<byte> data)
     {
-        if (data.Length < Size)
+        if (data.Length != Size)
         {
-            throw new ArgumentException($"Master Directory Block data must be at least {Size} bytes long.", nameof(data));
+            throw new ArgumentException($"Master Directory Block data must be exactly {Size} bytes long.", nameof(data));
         }
 
         int offset = 0;
@@ -183,10 +184,15 @@ public struct MFSMasterDirectoryBlock
 
         // drVN (byte) length of volume name.
         // drVN + 1 (bytes) characters of volume name
-        //  Volume name. This field has a fixed length, but it contains a variable-length Pascal string. The first byte indicates the number of characters in the string, and that many of the following bytes contain the string. Any remaining bytes should be padded with zeroes.
-        VolumeName = SpanUtilities.ReadPascalString(data[offset..(offset + 28)]);
+        // Volume name. This field has a fixed length, but it contains a
+        // variable-length Pascal string. The first byte indicates the
+        // number of characters in the string, and that many of the following
+        // bytes contain the string. Any remaining bytes should be padded with
+        // zeroes.
+        VolumeName = SpanUtilities.ReadPascalString(data[offset..(offset + 28)], out var volumeNameBytesRead);
+        Debug.Assert(volumeNameBytesRead <= 28, "Volume name read more bytes than expected.");
         offset += 28;
 
-        Debug.Assert(offset == Size);
+        Debug.Assert(offset == data.Length, "Did not read all Master Directory Block data.");
     }
 }

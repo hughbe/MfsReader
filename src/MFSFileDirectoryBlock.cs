@@ -109,7 +109,8 @@ public struct MFSFileDirectoryBlock
     /// Initializes a new instance of the <see cref="MFSFileDirectoryBlock"/> struct.
     /// </summary>
     /// <param name="data">The span containing the file directory block data.</param>
-    public MFSFileDirectoryBlock(ReadOnlySpan<byte> data)
+    /// <param name="bytesRead">The number of bytes read from the span.</param>
+    public MFSFileDirectoryBlock(ReadOnlySpan<byte> data, out int bytesRead)
     {
         if (data.Length < MinSize)
         {
@@ -227,9 +228,10 @@ public struct MFSFileDirectoryBlock
         // Pascal string. The first byte indicates the number of characters
         // in the string, and that many of the following bytes contain the
         // string.
-        Name = SpanUtilities.ReadPascalString(data[offset..]);
-        offset += 1 + Name.Length;
+        Name = SpanUtilities.ReadPascalString(data[offset..], out var nameBytesRead);
+        offset += nameBytesRead;
 
+        bytesRead = offset;
         Debug.Assert(offset == MinSize + Name.Length);
     }
 }

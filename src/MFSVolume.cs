@@ -54,15 +54,16 @@ public class MFSVolume
         stream.Seek(StreamStartOffset + MasterDirectoryBlockOffset, SeekOrigin.Begin);
 
         // The next block is the master directory block.
+        // Read the full 512-byte logical block because the allocation block map
+        // starts immediately after the 64-byte MDB header in the same block.
         Span<byte> blockBuffer = stackalloc byte[512];
         if (stream.Read(blockBuffer) != blockBuffer.Length)
         {
             throw new InvalidDataException("Unable to read DSK master directory block.");
         }
 
-        MasterDirectoryBlock = new MFSMasterDirectoryBlock(blockBuffer);
+        MasterDirectoryBlock = new MFSMasterDirectoryBlock(blockBuffer[..MFSMasterDirectoryBlock.Size]);
         AllocationBlockMap = new MFSAllocationBlockMap(blockBuffer, this);
-        
 
         // From https://www.weihenstephan.org/~michaste/pagetable/mac/Inside_Macintosh.pdf
         // "The first allocation block on a volume typically follows the file
@@ -106,13 +107,14 @@ public class MFSVolume
             while (offset < blockBuffer.Length)
             {
                 // Check for end of directory entries in this block.
-                if ((blockBuffer[offset] & (byte)MFSFileDirectoryBlockFlags.EntryUsed) == 0)
+                var blockFlags = (MFSFileDirectoryBlockFlags)blockBuffer[offset];
+                if (!blockFlags.HasFlag(MFSFileDirectoryBlockFlags.EntryUsed))
                 {
                     break;
                 }
                 
-                var fileEntry = new MFSFileDirectoryBlock(blockBuffer[offset..]);
-                offset += 51 + fileEntry.Name.Length;
+                var fileEntry = new MFSFileDirectoryBlock(blockBuffer.AsSpan()[offset..], out var bytesRead);
+                offset += bytesRead;
 
                 // Align to next word boundary.
                 if ((offset & 1) != 0)
@@ -126,15 +128,57 @@ public class MFSVolume
     }
 
     /// <summary>
+    /// Gets the data fork data of a file as a byte array.
+    /// </summary>
+    /// <param name="file">The file to read.</param>
+    /// <returns>>The data fork data as a byte array.</returns>
+    public byte[] GetDataForkData(MFSFileDirectoryBlock file)
+    {
+        return GetFileData(file, MFSForkType.DataFork);
+    }
+
+    /// <summary>
+    /// Gets the data fork data of a file and writes it to the specified output stream.
+    /// </summary>
+    /// <param name="file">The file to read.</param>
+    /// <param name="outputStream">The stream to write the data fork data to.</param>
+    /// <returns> The number of bytes written to the output stream.</returns>
+    public int GetDataForkData(MFSFileDirectoryBlock file, Stream outputStream)
+    {
+        return GetFileData(file, outputStream, MFSForkType.DataFork);
+    }
+
+    /// <summary>
+    /// Gets the resource fork data of a file as a byte array.
+    /// </summary>
+    /// <param name="file">The file to read.</param>
+    /// <returns>The resource fork data as a byte array.</returns>
+    public byte[] GetResourceForkData(MFSFileDirectoryBlock file)
+    {
+        return GetFileData(file, MFSForkType.ResourceFork);
+    }
+
+    /// <summary>
+    /// Gets the resource fork data of a file and writes it to the specified output stream.
+    /// </summary>
+    /// <param name="file">The file to read.</param>
+    /// <param name="outputStream">The stream to write the resource fork data to.</param>
+    /// <returns> The number of bytes written to the output stream.</returns>
+    public int GetResourceForkData(MFSFileDirectoryBlock file, Stream outputStream)
+    {
+        return GetFileData(file, outputStream, MFSForkType.ResourceFork);
+    }
+
+    /// <summary>
     /// Gets the data of a file as a byte array.
     /// </summary>
     /// <param name="file">The file to read.</param>
-    /// <param name="resourceFork">True to read the resource fork; otherwise, false for the data fork.</param>
+    /// <param name="forkType">The type of fork to read (data or resource).</param>
     /// <returns>The file data as a byte array.</returns>
-    public byte[] GetFileData(MFSFileDirectoryBlock file, bool resourceFork)
+    public byte[] GetFileData(MFSFileDirectoryBlock file, MFSForkType forkType)
     {
         using var ms = new MemoryStream();
-        GetFileData(file, ms, resourceFork);
+        GetFileData(file, ms, forkType);
         return ms.ToArray();
     }
 
@@ -143,13 +187,17 @@ public class MFSVolume
     /// </summary>
     /// <param name="file">The file to read.</param>
     /// <param name="outputStream">The stream to write the file data to.</param>
-    /// <param name="resourceFork">True to read the resource fork; otherwise, false for the data fork.</param>
+    /// <param name="forkType">The type of fork to read (data or resource).</param>
     /// <returns>The number of bytes written to the output stream.</returns>
-    public int GetFileData(MFSFileDirectoryBlock file, Stream outputStream, bool resourceFork)
+    public int GetFileData(MFSFileDirectoryBlock file, Stream outputStream, MFSForkType forkType)
     {
         ArgumentNullException.ThrowIfNull(outputStream);
+        if (!Enum.IsDefined(forkType))
+        {
+            throw new ArgumentOutOfRangeException(nameof(forkType), "Invalid fork type specified.");
+        }
 
-        if (!resourceFork)
+        if (forkType == MFSForkType.DataFork)
         {
             return ReadBlock(file.DataForkAllocationBlock, file.DataForkSize, outputStream);
         }
@@ -205,11 +253,12 @@ public class MFSVolume
             remainingBytes -= (uint)bytesToRead;
 
             ushort nextBlock = AllocationBlockMap.GetNextAllocationBlock(allocationBlock);
-            if (nextBlock == 0xFFF || nextBlock == 0)
+            if (nextBlock == 1 || nextBlock == 0)
             {
-                // End of file or unused - we're done
+                // End of file (1) or unused (0) - we're done
                 break;
             }
+
             allocationBlock = nextBlock;
         }
 
