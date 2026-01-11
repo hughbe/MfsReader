@@ -41,8 +41,8 @@ var volume = new MFSVolume(stream);
 // Get volume information
 var mdb = volume.MasterDirectoryBlock;
 Console.WriteLine($"Volume Name: {mdb.VolumeName}");
-Console.WriteLine($"Created: {mdb.CreateDate}");
-Console.WriteLine($"Modified: {mdb.ModifyDate}");
+Console.WriteLine($"Created: {mdb.CreationDate}");
+Console.WriteLine($"Last Backup: {mdb.LastBackupDate}");
 ```
 
 ### Enumerating Files
@@ -55,11 +55,11 @@ foreach (var file in files)
 {
     Console.WriteLine($"File: {file.Name}");
     Console.WriteLine($"  Type: {file.FileType}");
-    Console.WriteLine($"  Creator: {file.FileCreator}");
+    Console.WriteLine($"  Creator: {file.Creator}");
     Console.WriteLine($"  Data Fork: {file.DataForkSize} bytes");
     Console.WriteLine($"  Resource Fork: {file.ResourceForkSize} bytes");
-    Console.WriteLine($"  Created: {file.CreateDate}");
-    Console.WriteLine($"  Modified: {file.ModifyDate}");
+    Console.WriteLine($"  Created: {file.CreationDate}");
+    Console.WriteLine($"  Modified: {file.LastModificationDate}");
 }
 ```
 
@@ -70,11 +70,11 @@ foreach (var file in files)
 foreach (var file in volume.GetEntries())
 {
     // Get data fork as byte array
-    byte[] dataFork = volume.GetFileData(file, resourceFork: false);
+    byte[] dataFork = volume.GetDataForkData(file);
     File.WriteAllBytes($"{file.Name}.data", dataFork);
     
     // Get resource fork as byte array
-    byte[] resourceFork = volume.GetFileData(file, resourceFork: true);
+    byte[] resourceFork = volume.GetResourceForkData(file);
     File.WriteAllBytes($"{file.Name}.rsrc", resourceFork);
 }
 ```
@@ -86,7 +86,7 @@ foreach (var file in volume.GetEntries())
 var file = volume.GetEntries().First();
 
 using var outputStream = File.Create("output.bin");
-volume.GetFileData(file, outputStream, resourceFork: false);
+volume.GetDataForkData(file, outputStream);
 ```
 
 ## API Overview
@@ -97,36 +97,56 @@ The main class for reading MFS volumes.
 
 - `MFSVolume(Stream stream)` - Opens an MFS volume from a stream
 - `MasterDirectoryBlock` - Gets the master directory block (volume metadata)
+- `AllocationBlockMap` - Gets the allocation block map of the volume
 - `GetEntries()` - Enumerates all file entries in the volume
-- `GetFileData(file, resourceFork)` - Reads file data as a byte array
-- `GetFileData(file, outputStream, resourceFork)` - Streams file data to an output stream
+- `GetDataForkData(file)` - Reads the data fork as a byte array
+- `GetDataForkData(file, outputStream)` - Streams the data fork to an output stream
+- `GetResourceForkData(file)` - Reads the resource fork as a byte array
+- `GetResourceForkData(file, outputStream)` - Streams the resource fork to an output stream
+- `GetFileData(file, forkType)` - Reads file data as a byte array
+- `GetFileData(file, outputStream, forkType)` - Streams file data to an output stream
 
 ### MFSMasterDirectoryBlock
 
 Contains volume-level metadata:
 
+- `Signature` - Volume signature (0xD2D7 for MFS)
 - `VolumeName` - Name of the volume
-- `CreateDate` - Volume creation date
-- `ModifyDate` - Volume last modified date
-- `VolumeAttributes` - Volume attributes/flags
-- `FileCount` - Number of files in the volume
-- `FileDirectoryStart` - Starting block of the file directory
-- `FileDirectoryLength` - Length of the file directory in blocks
+- `CreationDate` - Volume creation date
+- `LastBackupDate` - Volume last backup date
+- `Attributes` - Volume attributes/flags
+- `NumberOfFiles` - Number of files in the volume
+- `FileDirectoryStart` - Starting sector of the file directory
+- `FileDirectoryLength` - Length of the file directory in sectors
+- `NumberOfAllocationBlocks` - Number of allocation blocks on the volume
 - `AllocationBlockSize` - Size of allocation blocks in bytes
+- `ClumpSize` - Clump size in bytes
+- `AllocationBlockStart` - Starting sector of the first allocation block
+- `NextFileNumber` - Next file number to be assigned
+- `FreeAllocationBlocks` - Number of free allocation blocks
 
 ### MFSFileDirectoryBlock
 
 Represents a file entry in the MFS volume:
 
 - `Name` - File name (up to 255 characters)
+- `Flags` - Entry flags (used, locked)
+- `Version` - Version number
 - `FileType` - Four-character file type code
-- `FileCreator` - Four-character creator code
-- `CreateDate` - File creation date
-- `ModifyDate` - File last modified date
-- `DataForkSize` - Size of the data fork in bytes
-- `ResourceForkSize` - Size of the resource fork in bytes
+- `Creator` - Four-character creator code
+- `FinderFlags` - Finder flags
+- `ParentLocationX` - X-coordinate of file's location in parent
+- `ParentLocationY` - Y-coordinate of file's location in parent
+- `FolderNumber` - Folder number
+- `FileNumber` - File number
+- `CreationDate` - File creation date
+- `LastModificationDate` - File last modified date
 - `DataForkAllocationBlock` - Starting allocation block for data fork
+- `DataForkSize` - Size of the data fork in bytes
+- `DataForkAllocatedSize` - Allocated size of the data fork in bytes
 - `ResourceForkAllocationBlock` - Starting allocation block for resource fork
+- `ResourceForkSize` - Size of the resource fork in bytes
+- `ResourceForkAllocatedSize` - Allocated size of the resource fork in bytes
 
 ## Building
 
@@ -177,7 +197,7 @@ Files are written as `<Name>.data` and `<Name>.res`, with `/` and `:` replaced b
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-Copyright (c) 2025 Hugh Bellamy
+Copyright (c) 2026 Hugh Bellamy
 
 ## About MFS
 
