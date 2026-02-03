@@ -5,7 +5,7 @@ namespace MfsReader;
 /// <summary>
 /// Represents the allocation block map of an MFS volume.
 /// </summary>
-public struct MFSAllocationBlockMap
+public struct MfsAllocationBlockMap
 {
     /// <summary>
     /// Gets the allocation block entries.
@@ -13,12 +13,12 @@ public struct MFSAllocationBlockMap
     public ushort[] Entries { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MFSAllocationBlockMap"/> struct.
+    /// Initializes a new instance of the <see cref="MfsAllocationBlockMap"/> struct.
     /// </summary>
     /// <param name="initialData">The initial data containing the allocation block map.</param>
     /// <param name="volume">The MFS volume.</param>
     /// <exception cref="InvalidDataException">Thrown if the allocation block map cannot be read.</exception>
-    public MFSAllocationBlockMap(Span<byte> initialData, MFSVolume volume)
+    public MfsAllocationBlockMap(Span<byte> initialData, MfsVolume volume)
     {
         // The data for the allocation block map starts immediately
         // after the volume information in the master directory block.
@@ -43,7 +43,7 @@ public struct MFSAllocationBlockMap
         
         // The allocation map starts at offset 64 within the MDB block.
         // First, copy the remaining bytes from the initial MDB block (offsets 64-511).
-        int bytesFromMdb = initialData.Length - MFSMasterDirectoryBlock.Size;
+        int bytesFromMdb = initialData.Length - MfsMasterDirectoryBlock.Size;
         int bytesCopied = Math.Min(bytesFromMdb, totalBytesNeeded);
         
         // Use ArrayPool for the temporary buffer to avoid heap allocation
@@ -54,7 +54,7 @@ public struct MFSAllocationBlockMap
         
         try
         {
-            initialData.Slice(MFSMasterDirectoryBlock.Size, bytesCopied).CopyTo(allocationMapData);
+            initialData.Slice(MfsMasterDirectoryBlock.Size, bytesCopied).CopyTo(allocationMapData);
             
             // Read additional blocks if needed
             int bytesRemaining = totalBytesNeeded - bytesCopied;
@@ -65,7 +65,7 @@ public struct MFSAllocationBlockMap
             while (bytesRemaining > 0)
             {
                 volume.Stream.Seek(
-                    volume.StreamStartOffset + MFSVolume.MasterDirectoryBlockOffset + blockIndex * 512,
+                    volume.StreamStartOffset + MfsVolume.MasterDirectoryBlockOffset + blockIndex * 512,
                     SeekOrigin.Begin);
                 
                 if (volume.Stream.Read(blockBuffer) != blockBuffer.Length)

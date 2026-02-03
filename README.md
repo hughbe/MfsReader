@@ -5,11 +5,11 @@ A lightweight .NET library for reading classic Macintosh File System (MFS) disk 
 ## Features
 
 - Read MFS disk images (e.g., 400K floppy disk images)
+- Support for Apple Partition Map (APM) disk images containing MFS partitions
 - Enumerate all files in an MFS volume
 - Extract both data and resource forks from files
 - Access file metadata (name, type, creator, dates, sizes)
 - Support for .NET 9.0
-- Zero external dependencies
 
 ## Installation
 
@@ -35,31 +35,43 @@ using MfsReader;
 // Open a disk image file
 using var stream = File.OpenRead("mfs400K.dsk");
 
-// Create an MFS volume reader
-var volume = new MFSVolume(stream);
+// Create an MFS disk reader - automatically detects APM partitions
+var disk = new MfsDisk(stream);
 
-// Get volume information
-var mdb = volume.MasterDirectoryBlock;
-Console.WriteLine($"Volume Name: {mdb.VolumeName}");
-Console.WriteLine($"Created: {mdb.CreationDate}");
-Console.WriteLine($"Last Backup: {mdb.LastBackupDate}");
+// Iterate through all MFS volumes found on the disk
+foreach (var volume in disk.Volumes)
+{
+    var mdb = volume.MasterDirectoryBlock;
+    Console.WriteLine($"Volume Name: {mdb.VolumeName}");
+    Console.WriteLine($"Created: {mdb.CreationDate}");
+    Console.WriteLine($"Last Backup: {mdb.LastBackupDate}");
+    
+    // Process files in this volume
+    foreach (var file in volume.GetEntries())
+    {
+        Console.WriteLine($"  File: {file.Name}");
+    }
+}
 ```
 
 ### Enumerating Files
 
 ```csharp
-// Get all files in the volume
-var files = volume.GetEntries();
-
-foreach (var file in files)
+// Get all files in each volume
+foreach (var volume in disk.Volumes)
 {
-    Console.WriteLine($"File: {file.Name}");
-    Console.WriteLine($"  Type: {file.FileType}");
-    Console.WriteLine($"  Creator: {file.Creator}");
-    Console.WriteLine($"  Data Fork: {file.DataForkSize} bytes");
-    Console.WriteLine($"  Resource Fork: {file.ResourceForkSize} bytes");
-    Console.WriteLine($"  Created: {file.CreationDate}");
-    Console.WriteLine($"  Modified: {file.LastModificationDate}");
+    var files = volume.GetEntries();
+
+    foreach (var file in files)
+    {
+        Console.WriteLine($"File: {file.Name}");
+        Console.WriteLine($"  Type: {file.FileType}");
+        Console.WriteLine($"  Creator: {file.Creator}");
+        Console.WriteLine($"  Data Fork: {file.DataForkSize} bytes");
+        Console.WriteLine($"  Resource Fork: {file.ResourceForkSize} bytes");
+        Console.WriteLine($"  Created: {file.CreationDate}");
+        Console.WriteLine($"  Modified: {file.LastModificationDate}");
+    }
 }
 ```
 
@@ -67,15 +79,18 @@ foreach (var file in files)
 
 ```csharp
 // Extract data fork
-foreach (var file in volume.GetEntries())
+foreach (var volume in disk.Volumes)
 {
-    // Get data fork as byte array
-    byte[] dataFork = volume.GetDataForkData(file);
-    File.WriteAllBytes($"{file.Name}.data", dataFork);
-    
-    // Get resource fork as byte array
-    byte[] resourceFork = volume.GetResourceForkData(file);
-    File.WriteAllBytes($"{file.Name}.rsrc", resourceFork);
+    foreach (var file in volume.GetEntries())
+    {
+        // Get data fork as byte array
+        byte[] dataFork = volume.GetDataForkData(file);
+        File.WriteAllBytes($"{file.Name}.data", dataFork);
+        
+        // Get resource fork as byte array
+        byte[] resourceFork = volume.GetResourceForkData(file);
+        File.WriteAllBytes($"{file.Name}.rsrc", resourceFork);
+    }
 }
 ```
 
@@ -83,6 +98,7 @@ foreach (var file in volume.GetEntries())
 
 ```csharp
 // Stream file data to an output stream
+var volume = disk.Volumes.First();
 var file = volume.GetEntries().First();
 
 using var outputStream = File.Create("output.bin");
@@ -91,11 +107,18 @@ volume.GetDataForkData(file, outputStream);
 
 ## API Overview
 
-### MFSVolume
+### MfsDisk
+
+The main class for reading disks that may contain Apple Partition Map entries with MFS partitions.
+
+- `MfsDisk(Stream stream)` - Opens a disk from a stream and scans for MFS volumes
+- `Volumes` - Gets the list of MFS volumes found on the disk
+
+### MfsVolume
 
 The main class for reading MFS volumes.
 
-- `MFSVolume(Stream stream)` - Opens an MFS volume from a stream
+- `MfsVolume(Stream stream)` - Opens an MFS volume from a stream
 - `MasterDirectoryBlock` - Gets the master directory block (volume metadata)
 - `AllocationBlockMap` - Gets the allocation block map of the volume
 - `GetEntries()` - Enumerates all file entries in the volume
@@ -106,7 +129,7 @@ The main class for reading MFS volumes.
 - `GetFileData(file, forkType)` - Reads file data as a byte array
 - `GetFileData(file, outputStream, forkType)` - Streams file data to an output stream
 
-### MFSMasterDirectoryBlock
+### MfsMasterDirectoryBlock
 
 Contains volume-level metadata:
 
@@ -125,7 +148,7 @@ Contains volume-level metadata:
 - `NextFileNumber` - Next file number to be assigned
 - `FreeAllocationBlocks` - Number of free allocation blocks
 
-### MFSFileDirectoryBlock
+### MfsFileDirectoryBlock
 
 Represents a file entry in the MFS volume:
 
@@ -162,20 +185,20 @@ Run tests:
 dotnet test
 ```
 
-## MFSDumper CLI
+## MfsDumper CLI
 
 Extract an MFS disk image to a directory using the dumper tool.
 
 ### Install/Build
 
 ```sh
-dotnet build dumper/MFSDumper.csproj -c Release
+dotnet build dumper/MfsDumper.csproj -c Release
 ```
 
 ### Usage
 
 ```sh
-MFSDumper \
+MfsDumper \
     /path/to/disk.dsk \
     -o /path/to/output \
     [--data-only | --resource-only]
@@ -218,6 +241,8 @@ The Macintosh File System (MFS) was the original file system for the Macintosh c
 - [DiskCopyReader](https://github.com/hughbe/DiskCopyReader) - Reader for Disk Copy 4.2 (.dc42) images
 - [MfsReader](https://github.com/hughbe/MfsReader) - Reader for MFS (Macintosh File System) volumes
 - [HfsReader](https://github.com/hughbe/HfsReader) - Reader for HFS (Hierarchical File System) volumes
+- [ApplePartitionMapReader](https://github.com/hughbe/ApplePartitionMapReader) - Reader for Apple Partition Map (APM) images
 - [ResourceForkReader](https://github.com/hughbe/ResourceForkReader) - Reader for Macintosh resource forks
+- [BinaryIIReader](https://github.com/hughbe/BinaryIIReader) - Reader for Binary II (.bny, .bxy) archives
 - [StuffItReader](https://github.com/hughbe/StuffItReader) - Reader for StuffIt (.sit) archives
 - [ShrinkItReader](https://github.com/hughbe/ShrinkItReader) - Reader for ShrinkIt (.shk, .sdk) archives

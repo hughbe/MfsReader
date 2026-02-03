@@ -4,7 +4,7 @@ namespace MfsReader;
 /// Defines the attributes of an MFS master directory block.
 /// </summary>
 [Flags]
-public enum MFSMasterDirectoryBlockAttributes : ushort
+public enum MfsMasterDirectoryBlockAttributes : ushort
 {
     /// <summary>
     /// Set if volume is locked by hardware.

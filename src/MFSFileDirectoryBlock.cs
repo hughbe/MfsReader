@@ -8,7 +8,7 @@ namespace MfsReader;
 /// <summary>
 /// Represents a file directory block in an MFS volume.
 /// </summary>
-public struct MFSFileDirectoryBlock
+public struct MfsFileDirectoryBlock
 {
     /// <summary>
     /// Gets the minimum size of a file directory block, in bytes.
@@ -18,7 +18,7 @@ public struct MFSFileDirectoryBlock
     /// <summary>
     /// Gets the flags of the file directory block.
     /// </summary>
-    public MFSFileDirectoryBlockFlags Flags { get; }
+    public MfsFileDirectoryBlockFlags Flags { get; }
 
     /// <summary>
     /// Gets the version number of the file directory block.
@@ -106,11 +106,11 @@ public struct MFSFileDirectoryBlock
     public string Name { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MFSFileDirectoryBlock"/> struct.
+    /// Initializes a new instance of the <see cref="MfsFileDirectoryBlock"/> struct.
     /// </summary>
     /// <param name="data">The span containing the file directory block data.</param>
     /// <param name="bytesRead">The number of bytes read from the span.</param>
-    public MFSFileDirectoryBlock(ReadOnlySpan<byte> data, out int bytesRead)
+    public MfsFileDirectoryBlock(ReadOnlySpan<byte> data, out int bytesRead)
     {
         if (data.Length < MinSize)
         {
@@ -124,7 +124,7 @@ public struct MFSFileDirectoryBlock
         // it indicates empty space with no further directory entries
         // in this block. Bit 0 is set if the file is locked. Other
         // bits are unknown.
-        Flags = (MFSFileDirectoryBlockFlags)data[offset];
+        Flags = (MfsFileDirectoryBlockFlags)data[offset];
         offset += 1;
 
         // fITyp (byte) version number

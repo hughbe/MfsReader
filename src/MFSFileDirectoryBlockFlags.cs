@@ -3,7 +3,7 @@ namespace MfsReader;
 /// <summary>
 /// Defines the flags of an MFS file directory block.
 /// </summary>
-public enum MFSFileDirectoryBlockFlags : byte
+public enum MfsFileDirectoryBlockFlags : byte
 {
     /// <summary>
     /// Set if the entry is locked.

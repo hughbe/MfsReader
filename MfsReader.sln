@@ -13,7 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MfsReader.Tests", "tests\Mf
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dumper", "dumper", "{6A12E86D-DB6E-91B4-263F-3EB1B9A58A55}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MFSDumper", "dumper\MFSDumper.csproj", "{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MfsDumper", "dumper\MfsDumper.csproj", "{A9B39030-B80D-4FDE-A1C1-A43242D6DACE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

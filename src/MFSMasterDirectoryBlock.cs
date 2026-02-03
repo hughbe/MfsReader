@@ -7,7 +7,7 @@ namespace MfsReader;
 /// <summary>
 /// Represents the master directory block of an MFS volume.
 /// </summary>
-public struct MFSMasterDirectoryBlock
+public struct MfsMasterDirectoryBlock
 {
     /// <summary>
     /// The size of the master directory block, in bytes.
@@ -32,7 +32,7 @@ public struct MFSMasterDirectoryBlock
     /// <summary>
     /// Gets the attributes of the master directory block.
     /// </summary>
-    public MFSMasterDirectoryBlockAttributes Attributes { get; }
+    public MfsMasterDirectoryBlockAttributes Attributes { get; }
 
     /// <summary>
     /// Gets the number of files in the volume.
@@ -87,11 +87,11 @@ public struct MFSMasterDirectoryBlock
     public string VolumeName { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MFSMasterDirectoryBlock"/> struct from the given data.
+    /// Initializes a new instance of the <see cref="MfsMasterDirectoryBlock"/> struct from the given data.
     /// </summary>
     /// <param name="data">The span containing the master directory block data.</param>
     /// <exception cref="ArgumentException">Thrown when the provided data is not the correct size.</exception>
-    public MFSMasterDirectoryBlock(Span<byte> data)
+    public MfsMasterDirectoryBlock(Span<byte> data)
     {
         if (data.Length != Size)
         {
@@ -128,7 +128,7 @@ public struct MFSMasterDirectoryBlock
         // Attributes. Bit 7 is set if the volume is locked by hardware.
         // Bit 15 is set if the volume is locked by software. Other bits
         // are unknown.
-        Attributes = (MFSMasterDirectoryBlockAttributes)BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        Attributes = (MfsMasterDirectoryBlockAttributes)BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
 
         // drNmFls (word) number of files in directory

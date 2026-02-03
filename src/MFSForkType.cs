@@ -3,7 +3,7 @@ namespace MfsReader;
 /// <summary>
 /// Specifies the type of fork in an MFS file.
 /// </summary>
-public enum MFSForkType
+public enum MfsForkType
 {
     /// <summary>
     /// The data fork.

@@ -51,41 +51,46 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         }
 
         await using var stream = input.OpenRead();
-        var volume = new MFSVolume(stream);
+        var disk = new MfsDisk(stream);
 
-        var entries = volume.GetEntries().ToList();
-        AnsiConsole.MarkupLine($"[green]Found[/] {entries.Count} items in volume.");
+        AnsiConsole.MarkupLine($"[green]Found[/] {disk.Volumes.Count} volume(s) on disk.");
 
-        foreach (var entry in entries)
+        foreach (var volume in disk.Volumes)
         {
-            var safeName = SanitizeName(entry.Name);
-            var basePath = Path.Combine(outputDir.FullName, safeName);
+            var entries = volume.GetEntries().ToList();
+            AnsiConsole.MarkupLine($"[green]Found[/] {entries.Count} items in volume '{volume.MasterDirectoryBlock.VolumeName}'.");
 
-            bool extractData = !settings.ResourceOnly && entry.DataForkSize != 0;
-            bool extractResource = !settings.DataOnly && entry.ResourceForkSize != 0;
-
-            if (!extractData && !extractResource)
+            foreach (var entry in entries)
             {
-                AnsiConsole.MarkupLine($"[yellow]Skipping[/] {entry.Name} (no selected forks).");
-                continue;
-            }
+                var safeName = SanitizeName(entry.Name);
+                var basePath = Path.Combine(outputDir.FullName, safeName);
 
-            if (extractData)
-            {
-                var dataPath = basePath + ".data";
-                await using var outputStream = File.Create(dataPath);
-                var bytes = volume.GetFileData(entry, outputStream, MFSForkType.DataFork);
-                AnsiConsole.MarkupLine($"Wrote data fork: {Path.GetFileName(dataPath)} ({bytes} bytes)");
-                TrySetTimestamps(dataPath, entry);
-            }
+                bool extractData = !settings.ResourceOnly && entry.DataForkSize != 0;
+                bool extractResource = !settings.DataOnly && entry.ResourceForkSize != 0;
 
-            if (extractResource)
-            {
-                var resPath = basePath + ".res";
-                await using var outputStream = File.Create(resPath);
-                var bytes = volume.GetFileData(entry, outputStream, MFSForkType.ResourceFork);
-                AnsiConsole.MarkupLine($"Wrote resource fork: {Path.GetFileName(resPath)} ({bytes} bytes)");
-                TrySetTimestamps(resPath, entry);
+                if (!extractData && !extractResource)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Skipping[/] {entry.Name} (no selected forks).");
+                    continue;
+                }
+
+                if (extractData)
+                {
+                    var dataPath = basePath + ".data";
+                    await using var outputStream = File.Create(dataPath);
+                    var bytes = volume.GetFileData(entry, outputStream, MfsForkType.DataFork);
+                    AnsiConsole.MarkupLine($"Wrote data fork: {Path.GetFileName(dataPath)} ({bytes} bytes)");
+                    TrySetTimestamps(dataPath, entry);
+                }
+
+                if (extractResource)
+                {
+                    var resPath = basePath + ".res";
+                    await using var outputStream = File.Create(resPath);
+                    var bytes = volume.GetFileData(entry, outputStream, MfsForkType.ResourceFork);
+                    AnsiConsole.MarkupLine($"Wrote resource fork: {Path.GetFileName(resPath)} ({bytes} bytes)");
+                    TrySetTimestamps(resPath, entry);
+                }
             }
         }
 
@@ -93,7 +98,7 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         return 0;
     }
 
-    private static void TrySetTimestamps(string path, MFSFileDirectoryBlock entry)
+    private static void TrySetTimestamps(string path, MfsFileDirectoryBlock entry)
     {
         try
         {
