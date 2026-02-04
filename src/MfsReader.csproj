@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ApplePartitionMapReader" Version="1.0.0" />
+    <PackageReference Include="ApplePartitionMapReader" Version="1.0.1" />
   </ItemGroup>
 
 </Project>

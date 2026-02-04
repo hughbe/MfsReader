@@ -2,7 +2,7 @@
 
 namespace MfsReader.Tests;
 
-public class MfsDiskTests
+public class MfsVolumeTests
 {
     [Theory]
     [InlineData("mfs400K.dsk")]

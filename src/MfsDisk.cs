@@ -28,9 +28,9 @@ public class MfsDisk
         if (ApplePartitionMap.IsApplePartitionMap(stream, 0))
         {
             var partitionMap = new ApplePartitionMap(stream, 0);
-            foreach (var partitionEntry in partitionMap.Entries)
+            foreach (var partitionEntry in partitionMap)
             {
-                if (partitionEntry.Type == ApplePartitionMapIdentifiers.AppleMFS)
+                if (partitionEntry.Type.Equals("Apple_MFS"u8))
                 {
                     // Found the MFS partition - add a volume for it.
                     var mfsStartOffset = (long)partitionEntry.PartitionStartBlock * 512;

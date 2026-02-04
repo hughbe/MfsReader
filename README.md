@@ -187,7 +187,7 @@ dotnet test
 
 ## MfsDumper CLI
 
-Extract an MFS disk image to a directory using the dumper tool.
+A command-line tool for inspecting and extracting MFS disk images.
 
 ### Install/Build
 
@@ -195,22 +195,87 @@ Extract an MFS disk image to a directory using the dumper tool.
 dotnet build dumper/MfsDumper.csproj -c Release
 ```
 
-### Usage
+### Commands
+
+#### `header` - Dump volume header information
+
+Display the Master Directory Block (MDB) metadata for all volumes on a disk:
 
 ```sh
-MfsDumper \
-    /path/to/disk.dsk \
-    -o /path/to/output \
-    [--data-only | --resource-only]
+mfs-dumper header /path/to/disk.dsk [-v <volume>]
 ```
 
-- Input: Path to the `.dsk` image.
-- Output: Destination directory for extracted files.
-- Fork selection:
-    - `--data-only`: Extract only data forks.
-    - `--resource-only`: Extract only resource forks.
+Shows volume name, creation/backup dates, allocation block info, and space usage.
 
-Files are written as `<Name>.data` and `<Name>.res`, with `/` and `:` replaced by `_` for compatibility.
+#### `list` - List files in a volume
+
+```sh
+mfs-dumper list /path/to/disk.dsk [OPTIONS]
+```
+
+Options:
+- `-v, --volume <n>` - Select specific volume (1-based index)
+- `-b, --brief` - Show only summary table without detailed per-file info
+- `-f, --filter <pattern>` - Filter files by name (supports `*` and `?` wildcards)
+
+Example:
+```sh
+mfs-dumper list disk.dsk --brief --filter "*.txt"
+```
+
+#### `map` - Dump allocation block map
+
+Visualize the allocation block map showing which blocks are free, in use, or end-of-file markers:
+
+```sh
+mfs-dumper map /path/to/disk.dsk [OPTIONS]
+```
+
+Options:
+- `-v, --volume <n>` - Select specific volume
+- `--used-only` - Show only used allocation blocks
+- `--free-only` - Show only free allocation blocks
+
+#### `hexdump` - Hex dump of file fork data
+
+View raw hex dump of a file's data or resource fork:
+
+```sh
+mfs-dumper hexdump /path/to/disk.dsk "File Name" [OPTIONS]
+```
+
+Options:
+- `-v, --volume <n>` - Select specific volume
+- `--fork <type>` - Fork to dump: `data` (default), `resource`, or `both`
+- `-n, --bytes <n>` - Maximum bytes to dump (default: 256)
+- `--offset <n>` - Byte offset to start from (default: 0)
+
+Example:
+```sh
+mfs-dumper hexdump disk.dsk "Read Me" --fork both -n 512
+```
+
+#### `extract` - Extract files from disk image
+
+```sh
+mfs-dumper extract /path/to/disk.dsk [OPTIONS]
+```
+
+Options:
+- `-o, --output <dir>` - Output directory (default: disk image name)
+- `-v, --volume <n>` - Extract from specific volume only
+- `-f, --filter <pattern>` - Extract only files matching pattern
+- `--data-only` - Extract only data forks
+- `--resource-only` - Extract only resource forks
+- `--preserve-dates` - Preserve original timestamps (default: true)
+- `--dry-run` - Preview extraction without writing files
+
+Example:
+```sh
+mfs-dumper extract disk.dsk -o output/ --filter "*.txt" --dry-run
+```
+
+Files are written as `<Name>.data` and `<Name>.res`, with invalid filename characters replaced by `_`.
 
 ## Requirements
 
