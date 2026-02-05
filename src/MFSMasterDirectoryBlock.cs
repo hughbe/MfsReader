@@ -84,14 +84,14 @@ public struct MfsMasterDirectoryBlock
     /// <summary>
     /// Gets the volume name.
     /// </summary>
-    public string VolumeName { get; }
+    public String27 VolumeName { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MfsMasterDirectoryBlock"/> struct from the given data.
     /// </summary>
     /// <param name="data">The span containing the master directory block data.</param>
     /// <exception cref="ArgumentException">Thrown when the provided data is not the correct size.</exception>
-    public MfsMasterDirectoryBlock(Span<byte> data)
+    public MfsMasterDirectoryBlock(ReadOnlySpan<byte> data)
     {
         if (data.Length != Size)
         {
@@ -102,7 +102,7 @@ public struct MfsMasterDirectoryBlock
 
         // drSigWord (word)
         // Signature. This must always be the value 0xD2D7 to identify a MFS volume.
-        Signature = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        Signature = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
         if (Signature != 0xD2D7) // MFS signature
         {
@@ -116,45 +116,45 @@ public struct MfsMasterDirectoryBlock
 
         // drCrDate (long word) date and time of initialization
         // Creation date, in seconds since midnight January 1st 1904.
-        CreationDate = SpanUtilities.ReadMacOSTimestamp(data[offset..]);
+        CreationDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
         offset += 4;
 
         // drLsBkUp (long word) date and time of last backup
         // Last backup date, in seconds since midnight January 1st 1904.
-        LastBackupDate = SpanUtilities.ReadMacOSTimestamp(data[offset..]);
+        LastBackupDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
         offset += 4;
 
         // drAtrb (word) volume attributes 
         // Attributes. Bit 7 is set if the volume is locked by hardware.
         // Bit 15 is set if the volume is locked by software. Other bits
         // are unknown.
-        Attributes = (MfsMasterDirectoryBlockAttributes)BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        Attributes = (MfsMasterDirectoryBlockAttributes)BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
         // drNmFls (word) number of files in directory
         // Number of files.
-        NumberOfFiles = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        NumberOfFiles = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
         // drDirSt (word) first block of directory
         // File directory start. This is the first sector of the directory,
         // relative to the start of the volume.
-        FileDirectoryStart = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        FileDirectoryStart = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
         // drBILen (word) length of directory in blocks 
         // File directory length. This is the length of the directory, in sectors.
-        FileDirectoryLength = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        FileDirectoryLength = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
         // drNmAIBIks (word) number of allocation blocks on volume
         // Number of allocation blocks.
-        NumberOfAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
+        NumberOfAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
         // drAlBlkSiz (long word) size of allocation blocks
         // Allocation block size, in bytes. This may be any multiple of 512, not just powers of 2.
-        AllocationBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
+        AllocationBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
         if (AllocationBlockSize == 0 || (AllocationBlockSize % 512) != 0)
@@ -189,8 +189,7 @@ public struct MfsMasterDirectoryBlock
         // number of characters in the string, and that many of the following
         // bytes contain the string. Any remaining bytes should be padded with
         // zeroes.
-        VolumeName = SpanUtilities.ReadPascalString(data[offset..(offset + 28)], out var volumeNameBytesRead);
-        Debug.Assert(volumeNameBytesRead <= 28, "Volume name read more bytes than expected.");
+        VolumeName = SpanUtilities.ReadPascalString27(data[offset..(offset + 28)]);
         offset += 28;
 
         Debug.Assert(offset == data.Length, "Did not read all Master Directory Block data.");

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 
 namespace MfsReader;
@@ -85,45 +86,52 @@ public class MfsVolume
     /// <exception cref="InvalidDataException">Thrown if the file directory cannot be read.</exception>
     public IEnumerable<MfsFileDirectoryBlock> GetEntries()
     {
-        var blockBuffer = new byte[512];
-
-        // From https://www.weihenstephan.org/~michaste/pagetable/mac/Inside_Macintosh.pdf
-        // "A file directory entry contains 51 bytes plus one byte for each
-        // character in the file name."
-        // "Entries are always an integral number of words and don't cross
-        // logical block boundaries"
-
-        // Seek to the file directory start.
-        Stream.Seek(StreamStartOffset + MasterDirectoryBlock.FileDirectoryStart * 512, SeekOrigin.Begin);
-        for (int block = 0; block < MasterDirectoryBlock.FileDirectoryLength; block++)
+        // Use ArrayPool to avoid allocation on every call
+        var blockBuffer = ArrayPool<byte>.Shared.Rent(512);
+        try
         {
-            // Read the next block.
-            if (Stream.Read(blockBuffer, 0, blockBuffer.Length) != blockBuffer.Length)
-            {
-                throw new InvalidDataException("Unable to read DSK file directory block.");
-            }
+            // From https://www.weihenstephan.org/~michaste/pagetable/mac/Inside_Macintosh.pdf
+            // "A file directory entry contains 51 bytes plus one byte for each
+            // character in the file name."
+            // "Entries are always an integral number of words and don't cross
+            // logical block boundaries"
 
-            int offset = 0;
-            while (offset < blockBuffer.Length)
+            // Seek to the file directory start.
+            Stream.Seek(StreamStartOffset + MasterDirectoryBlock.FileDirectoryStart * 512, SeekOrigin.Begin);
+            for (int block = 0; block < MasterDirectoryBlock.FileDirectoryLength; block++)
             {
-                // Check for end of directory entries in this block.
-                var blockFlags = (MfsFileDirectoryBlockFlags)blockBuffer[offset];
-                if (!blockFlags.HasFlag(MfsFileDirectoryBlockFlags.EntryUsed))
+                // Read the next block.
+                if (Stream.Read(blockBuffer, 0, 512) != 512)
                 {
-                    break;
-                }
-                
-                var fileEntry = new MfsFileDirectoryBlock(blockBuffer.AsSpan()[offset..], out var bytesRead);
-                offset += bytesRead;
-
-                // Align to next word boundary.
-                if ((offset & 1) != 0)
-                {
-                    offset++;
+                    throw new InvalidDataException("Unable to read DSK file directory block.");
                 }
 
-                yield return fileEntry;
+                int offset = 0;
+                while (offset < 512)
+                {
+                    // Check for end of directory entries in this block.
+                    var blockFlags = (MfsFileDirectoryBlockFlags)blockBuffer[offset];
+                    if (!blockFlags.HasFlag(MfsFileDirectoryBlockFlags.EntryUsed))
+                    {
+                        break;
+                    }
+                    
+                    var fileEntry = new MfsFileDirectoryBlock(blockBuffer.AsSpan(offset), out var bytesRead);
+                    offset += bytesRead;
+
+                    // Align to next word boundary.
+                    if ((offset & 1) != 0)
+                    {
+                        offset++;
+                    }
+
+                    yield return fileEntry;
+                }
             }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(blockBuffer);
         }
     }
 
@@ -177,7 +185,13 @@ public class MfsVolume
     /// <returns>The file data as a byte array.</returns>
     public byte[] GetFileData(MfsFileDirectoryBlock file, MfsForkType forkType)
     {
-        using var ms = new MemoryStream();
+        uint size = forkType == MfsForkType.DataFork ? file.DataForkSize : file.ResourceForkSize;
+        if (size == 0)
+        {
+            return [];
+        }
+
+        using var ms = new MemoryStream((int)size);
         GetFileData(file, ms, forkType);
         return ms.ToArray();
     }
