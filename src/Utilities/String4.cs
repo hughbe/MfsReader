@@ -149,7 +149,7 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly bool Equals(String4 other) =>
-        AsReadOnlySpan().SequenceEqual(other.AsReadOnlySpan());
+        Unsafe.As<String4, uint>(ref Unsafe.AsRef(in this)) == Unsafe.As<String4, uint>(ref Unsafe.AsRef(in other));
 
     /// <inheritdoc/>
     public override readonly bool Equals(object? obj) =>
@@ -157,11 +157,8 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public override readonly int GetHashCode()
-    {
-        ReadOnlySpan<byte> span = AsReadOnlySpan();
-        return HashCode.Combine(span[0], span[1], span[2], span[3]);
-    }
+    public override readonly int GetHashCode() =>
+        Unsafe.As<String4, int>(ref Unsafe.AsRef(in this));
 
     /// <summary>
     /// Determines whether two <see cref="String4"/> instances are equal.

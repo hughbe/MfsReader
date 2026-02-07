@@ -191,9 +191,10 @@ public class MfsVolume
             return [];
         }
 
-        using var ms = new MemoryStream((int)size);
+        var result = new byte[size];
+        using var ms = new MemoryStream(result, writable: true);
         GetFileData(file, ms, forkType);
-        return ms.ToArray();
+        return result;
     }
 
     /// <summary>
@@ -206,7 +207,7 @@ public class MfsVolume
     public int GetFileData(MfsFileDirectoryBlock file, Stream outputStream, MfsForkType forkType)
     {
         ArgumentNullException.ThrowIfNull(outputStream);
-        if (!Enum.IsDefined(forkType))
+        if (forkType != MfsForkType.DataFork && forkType != MfsForkType.ResourceFork)
         {
             throw new ArgumentOutOfRangeException(nameof(forkType), "Invalid fork type specified.");
         }
