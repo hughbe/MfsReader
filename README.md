@@ -23,6 +23,7 @@ MfsReader is designed for high performance with zero heap allocations during met
 
 This is achieved through:
 - **InlineArray structs** (`String4`, `String27`, `String255`) for fixed-size strings
+- **MfsTimestamp** for deferred timestamp conversion (stores raw `uint`, converts to `DateTime` only on demand)
 - **Span-based parsing** for efficient binary data reading
 - **ArrayPool** for temporary buffers
 
@@ -150,8 +151,8 @@ Contains volume-level metadata (zero-allocation struct):
 
 - `Signature` - Volume signature (0xD2D7 for MFS)
 - `VolumeName` - Name of the volume (`String27` - zero-allocation, implicitly converts to `string`)
-- `CreationDate` - Volume creation date
-- `LastBackupDate` - Volume last backup date
+- `CreationDate` - Volume creation date (`MfsTimestamp` - zero-allocation, implicitly converts to `DateTime`)
+- `LastBackupDate` - Volume last backup date (`MfsTimestamp` - zero-allocation, implicitly converts to `DateTime`)
 - `Attributes` - Volume attributes/flags
 - `NumberOfFiles` - Number of files in the volume
 - `FileDirectoryStart` - Starting sector of the file directory
@@ -177,14 +178,23 @@ Represents a file entry in the MFS volume (zero-allocation struct):
 - `ParentLocationY` - Y-coordinate of file's location in parent
 - `FolderNumber` - Folder number
 - `FileNumber` - File number
-- `CreationDate` - File creation date
-- `LastModificationDate` - File last modified date
+- `CreationDate` - File creation date (`MfsTimestamp` - zero-allocation, implicitly converts to `DateTime`)
+- `LastModificationDate` - File last modified date (`MfsTimestamp` - zero-allocation, implicitly converts to `DateTime`)
 - `DataForkAllocationBlock` - Starting allocation block for data fork
 - `DataForkSize` - Size of the data fork in bytes
 - `DataForkAllocatedSize` - Allocated size of the data fork in bytes
 - `ResourceForkAllocationBlock` - Starting allocation block for resource fork
 - `ResourceForkSize` - Size of the resource fork in bytes
 - `ResourceForkAllocatedSize` - Allocated size of the resource fork in bytes
+
+### MfsTimestamp
+
+Represents an MFS timestamp as seconds since the MacOS epoch (January 1, 1904 00:00:00 UTC). Zero-allocation struct that avoids converting to `DateTime` during parsing:
+
+- `Value` - Raw timestamp value (seconds since the MacOS epoch)
+- `ToDateTime()` - Converts to `DateTime` (UTC)
+- Implicit conversion to `DateTime` for seamless use
+- Implements `IEquatable<MfsTimestamp>`, `IComparable<MfsTimestamp>`, `IFormattable`
 
 ## Building
 

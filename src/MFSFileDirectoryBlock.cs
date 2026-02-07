@@ -92,12 +92,12 @@ public struct MfsFileDirectoryBlock
     /// <summary>
     /// Gets the creation date of the file.
     /// </summary>
-    public DateTime CreationDate { get; }
+    public MfsTimestamp CreationDate { get; }
 
     /// <summary>
     /// Gets the last modification date of the file.
     /// </summary>
-    public DateTime LastModificationDate { get; }
+    public MfsTimestamp LastModificationDate { get; }
 
     /// <summary>
     /// Gets the name of the file.
@@ -213,24 +213,32 @@ public struct MfsFileDirectoryBlock
 
         // fICrDat (long word) date and time of creation
         // Creation date, in seconds since midnight January 1st 1904.
-        CreationDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
-        offset += 4;
+        CreationDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
 
         // flMdDat (long word) date and time of last modification
         // Modification date, in seconds since midnight January 1st 1904.
-        LastModificationDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
-        offset += 4;
+        LastModificationDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
 
         // flNam (byte) length of file name followed by file name
+        var nameLength = data[offset];
+        offset += 1;
+
+        if (nameLength > String255.Size)
+        {
+            throw new ArgumentException($"File name length {nameLength} exceeds maximum of {String255.Size} bytes.", nameof(data));
+        }
+
         // flNam + 1 (bytes) characters of file name
         // File name. This field has a variable length and contains a
         // Pascal string. The first byte indicates the number of characters
         // in the string, and that many of the following bytes contain the
         // string.
-        Name = SpanUtilities.ReadPascalString255(data[offset..], out var nameBytesRead);
-        offset += nameBytesRead;
+        Name = new String255(data.Slice(offset, nameLength));
+        offset += nameLength;
 
         bytesRead = offset;
-        Debug.Assert(offset == MinSize + Name.Length);
+        Debug.Assert(offset == MinSize + Name.Length, "Did not read the expected number of bytes for the file directory block.");
     }
 }

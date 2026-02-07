@@ -22,12 +22,12 @@ public struct MfsMasterDirectoryBlock
     /// <summary>
     /// Gets the creation date of the volume.
     /// </summary>
-    public DateTime CreationDate { get; }
+    public MfsTimestamp CreationDate { get; }
 
     /// <summary>
     /// Gets the last backup date of the volume.
     /// </summary>
-    public DateTime LastBackupDate { get; }
+    public MfsTimestamp LastBackupDate { get; }
 
     /// <summary>
     /// Gets the attributes of the master directory block.
@@ -116,13 +116,13 @@ public struct MfsMasterDirectoryBlock
 
         // drCrDate (long word) date and time of initialization
         // Creation date, in seconds since midnight January 1st 1904.
-        CreationDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
-        offset += 4;
+        CreationDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
 
         // drLsBkUp (long word) date and time of last backup
         // Last backup date, in seconds since midnight January 1st 1904.
-        LastBackupDate = SpanUtilities.ReadMacOSTimestamp(data.Slice(offset, 4));
-        offset += 4;
+        LastBackupDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
 
         // drAtrb (word) volume attributes 
         // Attributes. Bit 7 is set if the volume is locked by hardware.
@@ -183,14 +183,22 @@ public struct MfsMasterDirectoryBlock
         offset += 2;
 
         // drVN (byte) length of volume name.
+        var volumeNameLength = data[offset];
+        offset += 1;
+
+        if (volumeNameLength > String27.Size)
+        {
+            throw new ArgumentException($"Volume name length {volumeNameLength} exceeds maximum of {String27.Size} bytes.", nameof(data));
+        }
+
         // drVN + 1 (bytes) characters of volume name
         // Volume name. This field has a fixed length, but it contains a
         // variable-length Pascal string. The first byte indicates the
         // number of characters in the string, and that many of the following
         // bytes contain the string. Any remaining bytes should be padded with
         // zeroes.
-        VolumeName = SpanUtilities.ReadPascalString27(data[offset..(offset + 28)]);
-        offset += 28;
+        VolumeName = new String27(data.Slice(offset, volumeNameLength));
+        offset += String27.Size;
 
         Debug.Assert(offset == data.Length, "Did not read all Master Directory Block data.");
     }

@@ -461,8 +461,8 @@ sealed class HexDumpCommand : AsyncCommand<HexDumpSettings>
 
         foreach (var volume in volumes)
         {
-            var entry = volume.GetEntries().FirstOrDefault(e => 
-                e.Name.Equals(settings.FileName, StringComparison.OrdinalIgnoreCase));
+            var entry = volume.GetEntries().FirstOrDefault(e =>
+                string.Equals(e.Name, settings.FileName, StringComparison.OrdinalIgnoreCase));
             if (entry.Name != null)
             {
                 targetVolume = volume;
