@@ -9,7 +9,9 @@ public class MfsDiskTests
     [InlineData("mfs800K.dsk")]
     [InlineData("mfs1440K.dsk")]
     [InlineData("SystemAdditions.dsk")]
+    [InlineData("SystemStartup.dsk")]
     [InlineData("MacSpeak.dsk")]
+    [InlineData("APM/combined.dsk")]
     public void Ctor_Stream(string diskName)
     {
         var filePath = Path.Combine("Samples", diskName);
@@ -31,6 +33,47 @@ public class MfsDiskTests
             {
                 ExportFile(volume, entry, outputPath);
             }
+        }
+    }
+
+    [Fact]
+    public void ApmCombinedDisk_ContainsSystemStartupVolume()
+    {
+        using var combinedStream = File.OpenRead(Path.Combine("Samples", "APM", "combined.dsk"));
+        var combinedDisk = new MfsDisk(combinedStream);
+
+        using var systemStartupStream = File.OpenRead(Path.Combine("Samples", "SystemStartup.dsk"));
+        var systemStartupDisk = new MfsDisk(systemStartupStream);
+
+        Assert.Single(systemStartupDisk.Volumes);
+        var expectedVolume = systemStartupDisk.Volumes[0];
+        var expectedEntries = expectedVolume.GetEntries().ToList();
+
+        // Find the matching volume in the APM disk by volume name.
+        var expectedVolumeName = expectedVolume.MasterDirectoryBlock.VolumeName.ToString();
+        var matchingVolume = combinedDisk.Volumes.Single(v =>
+            v.MasterDirectoryBlock.VolumeName.ToString() == expectedVolumeName);
+
+        var actualEntries = matchingVolume.GetEntries().ToList();
+        Assert.Equal(expectedEntries.Count, actualEntries.Count);
+
+        for (int i = 0; i < expectedEntries.Count; i++)
+        {
+            var expected = expectedEntries[i];
+            var actual = actualEntries[i];
+
+            Assert.Equal(expected.Name.ToString(), actual.Name.ToString());
+            Assert.Equal(expected.FileType.ToString(), actual.FileType.ToString());
+            Assert.Equal(expected.Creator.ToString(), actual.Creator.ToString());
+            Assert.Equal(expected.DataForkSize, actual.DataForkSize);
+            Assert.Equal(expected.ResourceForkSize, actual.ResourceForkSize);
+
+            Assert.Equal(
+                expectedVolume.GetDataForkData(expected),
+                matchingVolume.GetDataForkData(actual));
+            Assert.Equal(
+                expectedVolume.GetResourceForkData(expected),
+                matchingVolume.GetResourceForkData(actual));
         }
     }
 
