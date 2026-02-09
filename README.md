@@ -5,6 +5,7 @@ A lightweight, high-performance .NET library for reading classic Macintosh File 
 ## Features
 
 - Read MFS disk images (e.g., 400K floppy disk images)
+- Write MFS disk images from scratch with custom file entries
 - Support for Apple Partition Map (APM) disk images containing MFS partitions
 - Enumerate all files in an MFS volume
 - Extract both data and resource forks from files
@@ -121,6 +122,26 @@ using var outputStream = File.Create("output.bin");
 volume.GetDataForkData(file, outputStream);
 ```
 
+### Writing an MFS Disk Image
+
+```csharp
+using MfsReader;
+
+var writer = new MfsDiskWriter();
+
+// Add files with data and/or resource forks
+writer.AddFile("Read Me", "TEXT", "ttxt",
+    dataFork: File.ReadAllBytes("readme.txt"));
+
+writer.AddFile("MyApp", "APPL", "MYAP",
+    dataFork: File.ReadAllBytes("myapp.data"),
+    resourceFork: File.ReadAllBytes("myapp.rsrc"));
+
+// Write the disk image to a stream
+using var stream = File.Create("output.dsk");
+writer.WriteTo(stream, volumeName: "My Disk");
+```
+
 ## API Overview
 
 ### MfsDisk
@@ -144,6 +165,13 @@ The main class for reading MFS volumes.
 - `GetResourceForkData(file, outputStream)` - Streams the resource fork to an output stream
 - `GetFileData(file, forkType)` - Reads file data as a byte array
 - `GetFileData(file, outputStream, forkType)` - Streams file data to an output stream
+
+### MfsDiskWriter
+
+Builder-pattern class for creating MFS disk images.
+
+- `AddFile(name, fileType, creator, dataFork?, resourceFork?, flags?, finderFlags?, folderNumber?)` - Adds a file entry to the disk image
+- `WriteTo(stream, volumeName?, allocationBlockSize?)` - Writes the complete MFS disk image to a stream
 
 ### MfsMasterDirectoryBlock
 

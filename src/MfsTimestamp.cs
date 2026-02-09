@@ -37,6 +37,34 @@ public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsT
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MfsTimestamp"/> struct from a raw value.
+    /// </summary>
+    /// <param name="value">The raw timestamp value (seconds since the MacOS epoch).</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public MfsTimestamp(uint value)
+    {
+        Value = value;
+    }
+
+    /// <summary>
+    /// Creates an <see cref="MfsTimestamp"/> from a <see cref="DateTime"/>.
+    /// </summary>
+    /// <param name="dateTime">The date and time to convert.</param>
+    /// <returns>The corresponding <see cref="MfsTimestamp"/>.</returns>
+    public static MfsTimestamp FromDateTime(DateTime dateTime) =>
+        new((uint)(dateTime.ToUniversalTime() - MacOSEpoch).TotalSeconds);
+
+    /// <summary>
+    /// Writes the timestamp to the specified span in big-endian format.
+    /// </summary>
+    /// <param name="data">The destination span. Must be at least <see cref="Size"/> bytes.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly void WriteTo(Span<byte> data)
+    {
+        BinaryPrimitives.WriteUInt32BigEndian(data, Value);
+    }
+
+    /// <summary>
     /// Converts the MFS timestamp to a <see cref="DateTime"/>.
     /// </summary>
     /// <returns>The corresponding <see cref="DateTime"/> value in UTC.</returns>

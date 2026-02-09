@@ -121,6 +121,53 @@ public struct MfsAllocationBlockMap
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="MfsAllocationBlockMap"/> struct from the given entries.
+    /// </summary>
+    /// <param name="entries">The allocation block map entries.</param>
+    public MfsAllocationBlockMap(ushort[] entries)
+    {
+        Entries = entries;
+    }
+
+    /// <summary>
+    /// Writes the allocation block map to the specified span, encoding entries as 12-bit values.
+    /// </summary>
+    /// <param name="data">The destination span. Must be large enough to hold all encoded entries.</param>
+    /// <returns>The number of bytes written.</returns>
+    public readonly int WriteTo(Span<byte> data)
+    {
+        int byteOffset = 0;
+
+        for (int i = 2; i < Entries.Length; i++)
+        {
+            ushort value = Entries[i];
+
+            if (i % 2 == 0)
+            {
+                // Even entry: all 8 bits of byte1 and the high 4 bits of byte2.
+                data[byteOffset] = (byte)(value >> 4);
+                data[byteOffset + 1] = (byte)((data[byteOffset + 1] & 0x0F) | ((value & 0x0F) << 4));
+                byteOffset++;
+            }
+            else
+            {
+                // Odd entry: the low 4 bits of byte1 and all 8 bits of byte2.
+                data[byteOffset] = (byte)((data[byteOffset] & 0xF0) | ((value >> 8) & 0x0F));
+                data[byteOffset + 1] = (byte)(value & 0xFF);
+                byteOffset += 2;
+            }
+        }
+
+        // If the last entry was even, we need to advance past the final partial byte.
+        if (Entries.Length > 2 && (Entries.Length - 1) % 2 == 0)
+        {
+            byteOffset++;
+        }
+
+        return byteOffset;
+    }
+
+    /// <summary>
     /// Gets the allocation block entry at the specified index.
     /// </summary>
     /// <param name="index">The index of the allocation block.</param>

@@ -181,6 +181,29 @@ public struct String255 : ISpanFormattable, IEquatable<String255>
     public static bool operator !=(String255 left, String255 right) => !left.Equals(right);
 
     /// <summary>
+    /// Creates a <see cref="String255"/> from the specified character span.
+    /// </summary>
+    /// <param name="value">The character span to create from. Must be at most <see cref="Size"/> characters.</param>
+    /// <returns>The new <see cref="String255"/> instance.</returns>
+    /// <exception cref="ArgumentException">Thrown when the value is longer than <see cref="Size"/> characters.</exception>
+    public static String255 FromString(ReadOnlySpan<char> value)
+    {
+        if (value.Length > Size)
+        {
+            throw new ArgumentException($"Value must be at most {Size} characters long.", nameof(value));
+        }
+
+        var result = new String255();
+        var span = result.AsSpan();
+        for (int i = 0; i < value.Length; i++)
+        {
+            span[i] = (byte)value[i];
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Implicitly converts the <see cref="String255"/> to a <see cref="string"/>.
     /// </summary>
     /// <param name="str">The <see cref="String255"/> instance.</param>

@@ -202,4 +202,126 @@ public struct MfsMasterDirectoryBlock
 
         Debug.Assert(offset == data.Length, "Did not read all Master Directory Block data.");
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MfsMasterDirectoryBlock"/> struct with the specified values.
+    /// </summary>
+    /// <param name="creationDate">The creation date of the volume.</param>
+    /// <param name="attributes">The volume attributes.</param>
+    /// <param name="numberOfFiles">The number of files in the volume.</param>
+    /// <param name="fileDirectoryStart">The starting sector of the file directory.</param>
+    /// <param name="fileDirectoryLength">The length of the file directory, in sectors.</param>
+    /// <param name="numberOfAllocationBlocks">The number of allocation blocks on the volume.</param>
+    /// <param name="allocationBlockSize">The size of allocation blocks, in bytes.</param>
+    /// <param name="clumpSize">The clump size, in bytes.</param>
+    /// <param name="allocationBlockStart">The starting sector of the first allocation block.</param>
+    /// <param name="nextFileNumber">The next file number to be assigned.</param>
+    /// <param name="freeAllocationBlocks">The number of free allocation blocks.</param>
+    /// <param name="volumeName">The volume name.</param>
+    public MfsMasterDirectoryBlock(
+        MfsTimestamp creationDate,
+        MfsMasterDirectoryBlockAttributes attributes,
+        ushort numberOfFiles,
+        ushort fileDirectoryStart,
+        ushort fileDirectoryLength,
+        ushort numberOfAllocationBlocks,
+        uint allocationBlockSize,
+        uint clumpSize,
+        ushort allocationBlockStart,
+        uint nextFileNumber,
+        ushort freeAllocationBlocks,
+        String27 volumeName)
+    {
+        Signature = 0xD2D7;
+        CreationDate = creationDate;
+        LastBackupDate = new MfsTimestamp(0);
+        Attributes = attributes;
+        NumberOfFiles = numberOfFiles;
+        FileDirectoryStart = fileDirectoryStart;
+        FileDirectoryLength = fileDirectoryLength;
+        NumberOfAllocationBlocks = numberOfAllocationBlocks;
+        AllocationBlockSize = allocationBlockSize;
+        ClumpSize = clumpSize;
+        AllocationBlockStart = allocationBlockStart;
+        NextFileNumber = nextFileNumber;
+        FreeAllocationBlocks = freeAllocationBlocks;
+        VolumeName = volumeName;
+    }
+
+    /// <summary>
+    /// Writes this master directory block to the specified span in big-endian format.
+    /// </summary>
+    /// <param name="data">The destination span. Must be at least <see cref="Size"/> bytes.</param>
+    public readonly void WriteTo(Span<byte> data)
+    {
+        if (data.Length < Size)
+        {
+            throw new ArgumentException($"Destination must be at least {Size} bytes long.", nameof(data));
+        }
+
+        int offset = 0;
+
+        // drSigWord (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), Signature);
+        offset += 2;
+
+        // drCrDate (long word)
+        CreationDate.WriteTo(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
+
+        // drLsBkUp (long word)
+        LastBackupDate.WriteTo(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
+
+        // drAtrb (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), (ushort)Attributes);
+        offset += 2;
+
+        // drNmFls (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), NumberOfFiles);
+        offset += 2;
+
+        // drDirSt (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), FileDirectoryStart);
+        offset += 2;
+
+        // drBILen (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), FileDirectoryLength);
+        offset += 2;
+
+        // drNmAIBIks (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), NumberOfAllocationBlocks);
+        offset += 2;
+
+        // drAlBlkSiz (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), AllocationBlockSize);
+        offset += 4;
+
+        // drClpSiz (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data[offset..], ClumpSize);
+        offset += 4;
+
+        // drAIBISt (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data[offset..], AllocationBlockStart);
+        offset += 2;
+
+        // drNxtFNum (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data[offset..], NextFileNumber);
+        offset += 4;
+
+        // drFreeBks (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data[offset..], FreeAllocationBlocks);
+        offset += 2;
+
+        // drVN (byte) length of volume name
+        int volumeNameLength = VolumeName.Length;
+        data[offset] = (byte)volumeNameLength;
+        offset += 1;
+
+        // drVN + 1 (bytes) characters of volume name
+        VolumeName.AsReadOnlySpan()[..volumeNameLength].CopyTo(data.Slice(offset, String27.Size));
+        offset += String27.Size;
+
+        Debug.Assert(offset == Size, "Did not write all Master Directory Block data.");
+    }
 }

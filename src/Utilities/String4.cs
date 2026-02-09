@@ -171,6 +171,29 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
     public static bool operator !=(String4 left, String4 right) => !left.Equals(right);
 
     /// <summary>
+    /// Creates a <see cref="String4"/> from the specified character span.
+    /// </summary>
+    /// <param name="value">The character span to create from. Must be at most <see cref="Size"/> characters.</param>
+    /// <returns>The new <see cref="String4"/> instance.</returns>
+    /// <exception cref="ArgumentException">Thrown when the value is longer than <see cref="Size"/> characters.</exception>
+    public static String4 FromString(ReadOnlySpan<char> value)
+    {
+        if (value.Length > Size)
+        {
+            throw new ArgumentException($"Value must be at most {Size} characters long.", nameof(value));
+        }
+
+        var result = new String4();
+        var span = result.AsSpan();
+        for (int i = 0; i < value.Length; i++)
+        {
+            span[i] = (byte)value[i];
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Implicitly converts the <see cref="String4"/> to a <see cref="string"/>.
     /// </summary>
     /// <param name="str">The <see cref="String4"/> instance.</param>

@@ -78,6 +78,101 @@ public class MfsDiskTests
     }
 
     [Fact]
+    public void WriteTo_Roundtrip_InputFiles()
+    {
+        // Discover all input files, grouping .data and .res by base name.
+        var inputDir = "Inputs";
+        var inputFiles = Directory.GetFiles(inputDir);
+        var fileGroups = new Dictionary<string, (byte[]? dataFork, byte[]? resourceFork)>();
+
+        foreach (var file in inputFiles)
+        {
+            var fileName = Path.GetFileName(file);
+            string baseName;
+            bool isData;
+
+            if (fileName.EndsWith(".data"))
+            {
+                baseName = fileName[..^".data".Length];
+                isData = true;
+            }
+            else if (fileName.EndsWith(".res"))
+            {
+                baseName = fileName[..^".res".Length];
+                isData = false;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (!fileGroups.TryGetValue(baseName, out var group))
+            {
+                group = (null, null);
+            }
+
+            var data = File.ReadAllBytes(file);
+            fileGroups[baseName] = isData ? (data, group.resourceFork) : (group.dataFork, data);
+        }
+
+        Assert.NotEmpty(fileGroups);
+
+        // Write a disk image with all the input files.
+        var writer = new MfsDiskWriter();
+        var sortedNames = fileGroups.Keys.OrderBy(k => k).ToList();
+        foreach (var name in sortedNames)
+        {
+            var (dataFork, resourceFork) = fileGroups[name];
+            writer.AddFile(name, "????", "????", dataFork, resourceFork);
+        }
+
+        using var diskStream = new MemoryStream();
+        writer.WriteTo(diskStream, "TestVolume");
+
+        // Read the disk image back and verify all entries.
+        diskStream.Position = 0;
+        var disk = new MfsDisk(diskStream);
+        Assert.Single(disk.Volumes);
+
+        var volume = disk.Volumes[0];
+        Assert.Equal("TestVolume", volume.MasterDirectoryBlock.VolumeName.ToString());
+
+        var entries = volume.GetEntries().ToList();
+        Assert.Equal(sortedNames.Count, entries.Count);
+
+        for (int i = 0; i < sortedNames.Count; i++)
+        {
+            var expectedName = sortedNames[i];
+            var entry = entries[i];
+            var (expectedDataFork, expectedResourceFork) = fileGroups[expectedName];
+
+            Assert.Equal(expectedName, entry.Name.ToString());
+
+            // Verify data fork.
+            if (expectedDataFork != null)
+            {
+                Assert.Equal((uint)expectedDataFork.Length, entry.DataForkSize);
+                Assert.Equal(expectedDataFork, volume.GetDataForkData(entry));
+            }
+            else
+            {
+                Assert.Equal(0u, entry.DataForkSize);
+            }
+
+            // Verify resource fork.
+            if (expectedResourceFork != null)
+            {
+                Assert.Equal((uint)expectedResourceFork.Length, entry.ResourceForkSize);
+                Assert.Equal(expectedResourceFork, volume.GetResourceForkData(entry));
+            }
+            else
+            {
+                Assert.Equal(0u, entry.ResourceForkSize);
+            }
+        }
+    }
+
+    [Fact]
     public void Ctor_NullStream_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>("stream", () => new MfsDisk(null!));

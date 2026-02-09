@@ -241,4 +241,155 @@ public struct MfsFileDirectoryBlock
         bytesRead = offset;
         Debug.Assert(offset == MinSize + Name.Length, "Did not read the expected number of bytes for the file directory block.");
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MfsFileDirectoryBlock"/> struct with the specified values.
+    /// </summary>
+    /// <param name="flags">The file directory block flags.</param>
+    /// <param name="fileType">The file type.</param>
+    /// <param name="creator">The file creator.</param>
+    /// <param name="finderFlags">The Finder flags.</param>
+    /// <param name="folderNumber">The folder number.</param>
+    /// <param name="fileNumber">The unique file number.</param>
+    /// <param name="dataForkAllocationBlock">The first allocation block of the data fork.</param>
+    /// <param name="dataForkSize">The size of the data fork in bytes.</param>
+    /// <param name="dataForkAllocatedSize">The allocated size of the data fork in bytes.</param>
+    /// <param name="resourceForkAllocationBlock">The first allocation block of the resource fork.</param>
+    /// <param name="resourceForkSize">The size of the resource fork in bytes.</param>
+    /// <param name="resourceForkAllocatedSize">The allocated size of the resource fork in bytes.</param>
+    /// <param name="creationDate">The creation date.</param>
+    /// <param name="lastModificationDate">The last modification date.</param>
+    /// <param name="name">The file name.</param>
+    public MfsFileDirectoryBlock(
+        MfsFileDirectoryBlockFlags flags,
+        String4 fileType,
+        String4 creator,
+        ushort finderFlags,
+        short folderNumber,
+        uint fileNumber,
+        ushort dataForkAllocationBlock,
+        uint dataForkSize,
+        uint dataForkAllocatedSize,
+        ushort resourceForkAllocationBlock,
+        uint resourceForkSize,
+        uint resourceForkAllocatedSize,
+        MfsTimestamp creationDate,
+        MfsTimestamp lastModificationDate,
+        String255 name)
+    {
+        Flags = flags;
+        Version = 0;
+        FileType = fileType;
+        Creator = creator;
+        FinderFlags = finderFlags;
+        ParentLocationX = 0;
+        ParentLocationY = 0;
+        FolderNumber = folderNumber;
+        FileNumber = fileNumber;
+        DataForkAllocationBlock = dataForkAllocationBlock;
+        DataForkSize = dataForkSize;
+        DataForkAllocatedSize = dataForkAllocatedSize;
+        ResourceForkAllocationBlock = resourceForkAllocationBlock;
+        ResourceForkSize = resourceForkSize;
+        ResourceForkAllocatedSize = resourceForkAllocatedSize;
+        CreationDate = creationDate;
+        LastModificationDate = lastModificationDate;
+        Name = name;
+    }
+
+    /// <summary>
+    /// Writes this file directory block to the specified span in big-endian format.
+    /// </summary>
+    /// <param name="data">The destination span. Must be at least <see cref="MinSize"/> + name length bytes.</param>
+    /// <param name="bytesWritten">The number of bytes written to the span.</param>
+    public readonly void WriteTo(Span<byte> data, out int bytesWritten)
+    {
+        int nameLength = Name.Length;
+        int totalSize = MinSize + nameLength;
+        if (data.Length < totalSize)
+        {
+            throw new ArgumentException($"Destination must be at least {totalSize} bytes long.", nameof(data));
+        }
+
+        int offset = 0;
+
+        // fIFIags (byte)
+        data[offset] = (byte)Flags;
+        offset += 1;
+
+        // fITyp (byte)
+        data[offset] = Version;
+        offset += 1;
+
+        // flUsrWds: File type (4 bytes)
+        FileType.AsReadOnlySpan().CopyTo(data.Slice(offset, String4.Size));
+        offset += String4.Size;
+
+        // File creator (4 bytes)
+        Creator.AsReadOnlySpan().CopyTo(data.Slice(offset, String4.Size));
+        offset += String4.Size;
+
+        // Finder flags (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), FinderFlags);
+        offset += 2;
+
+        // Position X (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), ParentLocationX);
+        offset += 2;
+
+        // Position Y (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), ParentLocationY);
+        offset += 2;
+
+        // Folder number (word)
+        BinaryPrimitives.WriteInt16BigEndian(data.Slice(offset, 2), FolderNumber);
+        offset += 2;
+
+        // flFINum (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), FileNumber);
+        offset += 4;
+
+        // fIStBlk (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), DataForkAllocationBlock);
+        offset += 2;
+
+        // fILgLen (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), DataForkSize);
+        offset += 4;
+
+        // flPyLen (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), DataForkAllocatedSize);
+        offset += 4;
+
+        // fIRStBlk (word)
+        BinaryPrimitives.WriteUInt16BigEndian(data.Slice(offset, 2), ResourceForkAllocationBlock);
+        offset += 2;
+
+        // fIRLgLen (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), ResourceForkSize);
+        offset += 4;
+
+        // fIRPyLen (long word)
+        BinaryPrimitives.WriteUInt32BigEndian(data.Slice(offset, 4), ResourceForkAllocatedSize);
+        offset += 4;
+
+        // fICrDat (long word)
+        CreationDate.WriteTo(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
+
+        // flMdDat (long word)
+        LastModificationDate.WriteTo(data.Slice(offset, MfsTimestamp.Size));
+        offset += MfsTimestamp.Size;
+
+        // flNam (byte) length of file name
+        data[offset] = (byte)nameLength;
+        offset += 1;
+
+        // flNam + 1 (bytes) characters of file name
+        Name.AsReadOnlySpan()[..nameLength].CopyTo(data.Slice(offset, nameLength));
+        offset += nameLength;
+
+        bytesWritten = offset;
+        Debug.Assert(offset == MinSize + nameLength, "Did not write the expected number of bytes for the file directory block.");
+    }
 }

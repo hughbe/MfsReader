@@ -3,6 +3,7 @@ namespace MfsReader;
 /// <summary>
 /// Defines the flags of an MFS file directory block.
 /// </summary>
+[Flags]
 public enum MfsFileDirectoryBlockFlags : byte
 {
     /// <summary>
