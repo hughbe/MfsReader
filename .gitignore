@@ -131,3 +131,4 @@ iOSInjectionProject/
 
 .claude
 BenchmarkDotNet.Artifacts
+TestResults

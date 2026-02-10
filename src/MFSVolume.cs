@@ -77,6 +77,23 @@ public class MfsVolume
         // offset = (AllocationBlockStart * 512) - (2 * AllocationBlockSize) + (N * AllocationBlockSize)
         // So _allocationBlockStartOffset is the base, and we add (N * AllocationBlockSize)
         _allocationBlockStartOffset = StreamStartOffset + MasterDirectoryBlock.AllocationBlockStart * 512 - 2 * MasterDirectoryBlock.AllocationBlockSize;
+
+        // Validate that the file directory fits within the stream.
+        long fileDirectoryEndOffset = StreamStartOffset + (long)(MasterDirectoryBlock.FileDirectoryStart + MasterDirectoryBlock.FileDirectoryLength) * 512;
+        if (fileDirectoryEndOffset > stream.Length)
+        {
+            throw new InvalidDataException($"File directory extends beyond stream bounds (end offset {fileDirectoryEndOffset}, stream length {stream.Length}).");
+        }
+
+        // Validate that the allocation block region starts within the stream.
+        if (MasterDirectoryBlock.NumberOfAllocationBlocks > 0)
+        {
+            long allocationBlockRegionStart = StreamStartOffset + (long)MasterDirectoryBlock.AllocationBlockStart * 512;
+            if (allocationBlockRegionStart > stream.Length)
+            {
+                throw new InvalidDataException($"Allocation block start is beyond stream bounds (offset {allocationBlockRegionStart}, stream length {stream.Length}).");
+            }
+        }
     }
 
     /// <summary>
@@ -107,7 +124,7 @@ public class MfsVolume
                 }
 
                 int offset = 0;
-                while (offset < 512)
+                while (offset + MfsFileDirectoryBlock.MinSize <= 512)
                 {
                     // Check for end of directory entries in this block.
                     var blockFlags = (MfsFileDirectoryBlockFlags)blockBuffer[offset];
@@ -141,9 +158,7 @@ public class MfsVolume
     /// <param name="file">The file to read.</param>
     /// <returns>>The data fork data as a byte array.</returns>
     public byte[] GetDataForkData(MfsFileDirectoryBlock file)
-    {
-        return GetFileData(file, MfsForkType.DataFork);
-    }
+        => GetFileData(file, MfsForkType.DataFork);
 
     /// <summary>
     /// Gets the data fork data of a file and writes it to the specified output stream.
@@ -152,9 +167,7 @@ public class MfsVolume
     /// <param name="outputStream">The stream to write the data fork data to.</param>
     /// <returns> The number of bytes written to the output stream.</returns>
     public int GetDataForkData(MfsFileDirectoryBlock file, Stream outputStream)
-    {
-        return GetFileData(file, outputStream, MfsForkType.DataFork);
-    }
+        => GetFileData(file, outputStream, MfsForkType.DataFork);
 
     /// <summary>
     /// Gets the resource fork data of a file as a byte array.
@@ -162,9 +175,7 @@ public class MfsVolume
     /// <param name="file">The file to read.</param>
     /// <returns>The resource fork data as a byte array.</returns>
     public byte[] GetResourceForkData(MfsFileDirectoryBlock file)
-    {
-        return GetFileData(file, MfsForkType.ResourceFork);
-    }
+        => GetFileData(file, MfsForkType.ResourceFork);
 
     /// <summary>
     /// Gets the resource fork data of a file and writes it to the specified output stream.
@@ -173,9 +184,7 @@ public class MfsVolume
     /// <param name="outputStream">The stream to write the resource fork data to.</param>
     /// <returns> The number of bytes written to the output stream.</returns>
     public int GetResourceForkData(MfsFileDirectoryBlock file, Stream outputStream)
-    {
-        return GetFileData(file, outputStream, MfsForkType.ResourceFork);
-    }
+        => GetFileData(file, outputStream, MfsForkType.ResourceFork);
 
     /// <summary>
     /// Gets the data of a file as a byte array.
@@ -237,46 +246,69 @@ public class MfsVolume
         }
 
         // Read and write the data in chunks
-        Span<byte> buffer = stackalloc byte[(int)MasterDirectoryBlock.AllocationBlockSize];
-        int totalBytesRead = 0;
-        uint remainingBytes = size;
+        // Use stackalloc for typical block sizes, ArrayPool for large ones to avoid stack overflow.
+        int blockSize = (int)MasterDirectoryBlock.AllocationBlockSize;
+        byte[]? rentedBuffer = null;
+        Span<byte> buffer = blockSize <= 4096
+            ? stackalloc byte[blockSize]
+            : (rentedBuffer = ArrayPool<byte>.Shared.Rent(blockSize)).AsSpan(0, blockSize);
 
-        while (remainingBytes > 0)
+        try
         {
-            // Calculate the byte offset of the allocation block.
-            // Allocation blocks start after the boot blocks (2 blocks), master directory block (1 block),
-            // and the file directory blocks.
-            long offset = _allocationBlockStartOffset + (allocationBlock * (long)MasterDirectoryBlock.AllocationBlockSize);
+            int totalBytesRead = 0;
+            uint remainingBytes = size;
+            int blocksFollowed = 0;
+            int maxBlocks = MasterDirectoryBlock.NumberOfAllocationBlocks;
 
-            // Validate that the offset is within the stream bounds
-            if (offset < 0 || offset >= Stream.Length)
+            while (remainingBytes > 0)
             {
-                throw new InvalidDataException($"Allocation block {allocationBlock} points to an offset ({offset}) outside the valid stream range (0-{Stream.Length}).");
+                if (++blocksFollowed > maxBlocks)
+                {
+                    throw new InvalidDataException("Allocation block chain contains a cycle.");
+                }
+
+                // Calculate the byte offset of the allocation block.
+                // Allocation blocks start after the boot blocks (2 blocks), master directory block (1 block),
+                // and the file directory blocks.
+                long offset = _allocationBlockStartOffset + (allocationBlock * (long)MasterDirectoryBlock.AllocationBlockSize);
+
+                // Validate that the offset is within the stream bounds
+                if (offset < 0 || offset >= Stream.Length)
+                {
+                    throw new InvalidDataException($"Allocation block {allocationBlock} points to an offset ({offset}) outside the valid stream range (0-{Stream.Length}).");
+                }
+
+                Stream.Seek(offset, SeekOrigin.Begin);
+
+                // Read the allocation block data.
+                int bytesToRead = (int)Math.Min(buffer.Length, remainingBytes);
+                if (Stream.Read(buffer[..bytesToRead]) != bytesToRead)
+                {
+                    throw new InvalidDataException($"Unexpected end of stream while reading allocation block {allocationBlock}.");
+                }
+
+                outputStream.Write(buffer[..bytesToRead]);
+                totalBytesRead += bytesToRead;
+                remainingBytes -= (uint)bytesToRead;
+
+                ushort nextBlock = AllocationBlockMap.GetNextAllocationBlock(allocationBlock);
+                if (nextBlock == 1 || nextBlock == 0)
+                {
+                    // End of file (1) or unused (0) - we're done
+                    break;
+                }
+
+                allocationBlock = nextBlock;
             }
 
-            Stream.Seek(offset, SeekOrigin.Begin);
-
-            // Read the allocation block data.            
-            int bytesToRead = (int)Math.Min(buffer.Length, remainingBytes);
-            if (Stream.Read(buffer[..bytesToRead]) != bytesToRead)
-            {
-                throw new InvalidDataException($"Unexpected end of stream while reading allocation block {allocationBlock}.");
-            }
-
-            outputStream.Write(buffer[..bytesToRead]);
-            totalBytesRead += bytesToRead;
-            remainingBytes -= (uint)bytesToRead;
-
-            ushort nextBlock = AllocationBlockMap.GetNextAllocationBlock(allocationBlock);
-            if (nextBlock == 1 || nextBlock == 0)
-            {
-                // End of file (1) or unused (0) - we're done
-                break;
-            }
-
-            allocationBlock = nextBlock;
+            return totalBytesRead;
         }
-
-        return totalBytesRead;
+        finally
+        {
+            if (rentedBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
+            }
+        }
     }
 }

@@ -211,6 +211,26 @@ public struct MfsFileDirectoryBlock
         ResourceForkAllocatedSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
+        if (DataForkSize > DataForkAllocatedSize)
+        {
+            throw new InvalidDataException($"Data fork logical size ({DataForkSize}) exceeds allocated size ({DataForkAllocatedSize}).");
+        }
+
+        if (ResourceForkSize > ResourceForkAllocatedSize)
+        {
+            throw new InvalidDataException($"Resource fork logical size ({ResourceForkSize}) exceeds allocated size ({ResourceForkAllocatedSize}).");
+        }
+
+        if (DataForkSize > 0 && DataForkAllocationBlock == 0)
+        {
+            throw new InvalidDataException("Data fork has non-zero size but no starting allocation block.");
+        }
+
+        if (ResourceForkSize > 0 && ResourceForkAllocationBlock == 0)
+        {
+            throw new InvalidDataException("Resource fork has non-zero size but no starting allocation block.");
+        }
+
         // fICrDat (long word) date and time of creation
         // Creation date, in seconds since midnight January 1st 1904.
         CreationDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
@@ -224,11 +244,6 @@ public struct MfsFileDirectoryBlock
         // flNam (byte) length of file name followed by file name
         var nameLength = data[offset];
         offset += 1;
-
-        if (nameLength > String255.Size)
-        {
-            throw new ArgumentException($"File name length {nameLength} exceeds maximum of {String255.Size} bytes.", nameof(data));
-        }
 
         // flNam + 1 (bytes) characters of file name
         // File name. This field has a variable length and contains a

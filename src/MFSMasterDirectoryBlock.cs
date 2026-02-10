@@ -152,6 +152,13 @@ public struct MfsMasterDirectoryBlock
         NumberOfAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
+        // The allocation block map uses 12-bit entries, so block numbers range from 2 to 4095.
+        // This limits the maximum number of allocation blocks to 4094.
+        if (NumberOfAllocationBlocks > 4094)
+        {
+            throw new InvalidDataException($"Number of allocation blocks ({NumberOfAllocationBlocks}) exceeds the 12-bit allocation block map limit of 4094.");
+        }
+
         // drAlBlkSiz (long word) size of allocation blocks
         // Allocation block size, in bytes. This may be any multiple of 512, not just powers of 2.
         AllocationBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
@@ -162,12 +169,17 @@ public struct MfsMasterDirectoryBlock
             throw new ArgumentException("Invalid allocation block size in MFS master directory block.", nameof(data));
         }
 
-        // drClpSiz (long word) number of bytes to allocate 
+        // drClpSiz (long word) number of bytes to allocate
         // Clump size, in bytes. This is a hint to the filesystem driver for how many allocation blocks to reserve when increasing the size of a file. This must be a multiple of the allocation block size.
         ClumpSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
 
-        // drAIBISt (word) first allocation block in block map 
+        if (ClumpSize != 0 && (ClumpSize % AllocationBlockSize) != 0)
+        {
+            throw new InvalidDataException($"Clump size ({ClumpSize}) must be a multiple of the allocation block size ({AllocationBlockSize}).");
+        }
+
+        // drAIBISt (word) first allocation block in block map
         // Allocation block start. This is the first sector of the first allocation block, relative to the start of the volume.
         AllocationBlockStart = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
@@ -181,6 +193,11 @@ public struct MfsMasterDirectoryBlock
         // Free allocation blocks.
         FreeAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
+
+        if (FreeAllocationBlocks > NumberOfAllocationBlocks)
+        {
+            throw new InvalidDataException($"Free allocation blocks ({FreeAllocationBlocks}) exceeds total number of allocation blocks ({NumberOfAllocationBlocks}).");
+        }
 
         // drVN (byte) length of volume name.
         var volumeNameLength = data[offset];
