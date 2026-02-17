@@ -58,10 +58,7 @@ public class MfsVolume
         // Read the full 512-byte logical block because the allocation block map
         // starts immediately after the 64-byte MDB header in the same block.
         Span<byte> blockBuffer = stackalloc byte[512];
-        if (stream.Read(blockBuffer) != blockBuffer.Length)
-        {
-            throw new InvalidDataException("Unable to read DSK master directory block.");
-        }
+        stream.ReadExactly(blockBuffer);
 
         MasterDirectoryBlock = new MfsMasterDirectoryBlock(blockBuffer[..MfsMasterDirectoryBlock.Size]);
         AllocationBlockMap = new MfsAllocationBlockMap(blockBuffer, this);
@@ -118,10 +115,7 @@ public class MfsVolume
             for (int block = 0; block < MasterDirectoryBlock.FileDirectoryLength; block++)
             {
                 // Read the next block.
-                if (Stream.Read(blockBuffer, 0, 512) != 512)
-                {
-                    throw new InvalidDataException("Unable to read DSK file directory block.");
-                }
+                Stream.ReadExactly(blockBuffer);
 
                 int offset = 0;
                 while (offset + MfsFileDirectoryBlock.MinSize <= 512)
@@ -282,10 +276,7 @@ public class MfsVolume
 
                 // Read the allocation block data.
                 int bytesToRead = (int)Math.Min(buffer.Length, remainingBytes);
-                if (Stream.Read(buffer[..bytesToRead]) != bytesToRead)
-                {
-                    throw new InvalidDataException($"Unexpected end of stream while reading allocation block {allocationBlock}.");
-                }
+                Stream.ReadExactly(buffer[..bytesToRead]);
 
                 outputStream.Write(buffer[..bytesToRead]);
                 totalBytesRead += bytesToRead;

@@ -67,11 +67,7 @@ public struct MfsAllocationBlockMap
                 volume.Stream.Seek(
                     volume.StreamStartOffset + MfsVolume.MasterDirectoryBlockOffset + blockIndex * 512,
                     SeekOrigin.Begin);
-                
-                if (volume.Stream.Read(blockBuffer) != blockBuffer.Length)
-                {
-                    throw new InvalidDataException("Unable to read DSK allocation block map.");
-                }
+                volume.Stream.ReadExactly(blockBuffer);
                 
                 int bytesToCopy = Math.Min(512, bytesRemaining);
                 blockBuffer[..bytesToCopy].CopyTo(allocationMapData[destOffset..]);

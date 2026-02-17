@@ -37,13 +37,13 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void Volume_TruncatedMdb_ThrowsInvalidDataException()
+    public void Volume_TruncatedMdb_ThrowsEndOfStreamException()
     {
         // Create a stream with boot blocks (1024 bytes) but only partial MDB data.
         // MfsVolume seeks to offset 1024 then tries to read 512 bytes.
         var data = new byte[1200]; // Only 176 bytes after offset 1024, not enough for 512
         using var ms = new MemoryStream(data);
-        Assert.Throws<InvalidDataException>(() => new MfsVolume(ms));
+        Assert.Throws<EndOfStreamException>(() => new MfsVolume(ms));
     }
 
     #endregion
@@ -171,7 +171,7 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void Volume_ReadBlock_TruncatedRead_ThrowsInvalidDataException()
+    public void Volume_ReadBlock_TruncatedRead_ThrowsEndOfStreamException()
     {
         byte[] fullDisk = CreateValidDiskImage(dataForkSize: 100);
 
@@ -185,7 +185,7 @@ public class MfsCoverageTests
         var volume = new MfsVolume(ms);
         var entries = volume.GetEntries().ToList();
 
-        Assert.Throws<InvalidDataException>(() => volume.GetDataForkData(entries[0]));
+        Assert.Throws<EndOfStreamException>(() => volume.GetDataForkData(entries[0]));
     }
 
     [Fact]
@@ -504,7 +504,7 @@ public class MfsCoverageTests
     #region GetEntries Truncated Read
 
     [Fact]
-    public void Volume_GetEntries_TruncatedRead_ThrowsInvalidDataException()
+    public void Volume_GetEntries_TruncatedRead_ThrowsEndOfStreamException()
     {
         byte[] diskBytes = CreateValidDiskImage(dataForkSize: 100);
 
@@ -519,7 +519,7 @@ public class MfsCoverageTests
         long fileDirectoryOffset = volume.MasterDirectoryBlock.FileDirectoryStart * 512L;
         ms.SetLength(fileDirectoryOffset + 100);
 
-        Assert.Throws<InvalidDataException>(() => volume.GetEntries().ToList());
+        Assert.Throws<EndOfStreamException>(() => volume.GetEntries().ToList());
     }
 
     #endregion
@@ -527,7 +527,7 @@ public class MfsCoverageTests
     #region AllocationBlockMap Truncated Read
 
     [Fact]
-    public void AllocationBlockMap_TruncatedRead_ThrowsInvalidDataException()
+    public void AllocationBlockMap_TruncatedRead_ThrowsEndOfStreamException()
     {
         // Create a MDB with 300 allocation blocks so the ABM spans 2+ sectors.
         // ABM bytes = (300 * 3 + 1) / 2 = 450. First sector has 448 bytes available.
@@ -553,7 +553,7 @@ public class MfsCoverageTests
         mdb.WriteTo(data.AsSpan(1024, MfsMasterDirectoryBlock.Size));
 
         using var ms = new MemoryStream(data);
-        Assert.Throws<InvalidDataException>(() => new MfsVolume(ms));
+        Assert.Throws<EndOfStreamException>(() => new MfsVolume(ms));
     }
 
     #endregion
