@@ -111,7 +111,7 @@ public struct MfsMasterDirectoryBlock
                 throw new InvalidDataException("The provided data appears to be an HFS volume, not MFS.");
             }
 
-            throw new InvalidDataException($"Invalid MFS master directory block signature.");
+            throw new InvalidDataException("Invalid MFS master directory block signature.");
         }
 
         // drCrDate (long word) date and time of initialization
@@ -124,7 +124,7 @@ public struct MfsMasterDirectoryBlock
         LastBackupDate = new MfsTimestamp(data.Slice(offset, MfsTimestamp.Size));
         offset += MfsTimestamp.Size;
 
-        // drAtrb (word) volume attributes 
+        // drAtrb (word) volume attributes
         // Attributes. Bit 7 is set if the volume is locked by hardware.
         // Bit 15 is set if the volume is locked by software. Other bits
         // are unknown.
@@ -142,7 +142,7 @@ public struct MfsMasterDirectoryBlock
         FileDirectoryStart = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
-        // drBILen (word) length of directory in blocks 
+        // drBILen (word) length of directory in blocks
         // File directory length. This is the length of the directory, in sectors.
         FileDirectoryLength = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
@@ -152,32 +152,15 @@ public struct MfsMasterDirectoryBlock
         NumberOfAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
-        // The allocation block map uses 12-bit entries, so block numbers range from 2 to 4095.
-        // This limits the maximum number of allocation blocks to 4094.
-        if (NumberOfAllocationBlocks > 4094)
-        {
-            throw new InvalidDataException($"Number of allocation blocks ({NumberOfAllocationBlocks}) exceeds the 12-bit allocation block map limit of 4094.");
-        }
-
         // drAlBlkSiz (long word) size of allocation blocks
         // Allocation block size, in bytes. This may be any multiple of 512, not just powers of 2.
         AllocationBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
-        if (AllocationBlockSize == 0 || (AllocationBlockSize % 512) != 0)
-        {
-            throw new ArgumentException("Invalid allocation block size in MFS master directory block.", nameof(data));
-        }
-
         // drClpSiz (long word) number of bytes to allocate
         // Clump size, in bytes. This is a hint to the filesystem driver for how many allocation blocks to reserve when increasing the size of a file. This must be a multiple of the allocation block size.
         ClumpSize = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
-
-        if (ClumpSize != 0 && (ClumpSize % AllocationBlockSize) != 0)
-        {
-            throw new InvalidDataException($"Clump size ({ClumpSize}) must be a multiple of the allocation block size ({AllocationBlockSize}).");
-        }
 
         // drAIBISt (word) first allocation block in block map
         // Allocation block start. This is the first sector of the first allocation block, relative to the start of the volume.
@@ -188,24 +171,19 @@ public struct MfsMasterDirectoryBlock
         // Next file number. This is a hint to the filesystem driver for which file number it should assign to the next file.
         NextFileNumber = BinaryPrimitives.ReadUInt32BigEndian(data[offset..]);
         offset += 4;
-        
+
         // drFreeBks (word) number of unused allocation blocks
         // Free allocation blocks.
         FreeAllocationBlocks = BinaryPrimitives.ReadUInt16BigEndian(data[offset..]);
         offset += 2;
 
-        if (FreeAllocationBlocks > NumberOfAllocationBlocks)
-        {
-            throw new InvalidDataException($"Free allocation blocks ({FreeAllocationBlocks}) exceeds total number of allocation blocks ({NumberOfAllocationBlocks}).");
-        }
-
         // drVN (byte) length of volume name.
         var volumeNameLength = data[offset];
         offset += 1;
 
-        if (volumeNameLength > String27.Size)
+        if (volumeNameLength == 0 || volumeNameLength > String27.Size)
         {
-            throw new ArgumentException($"Volume name length {volumeNameLength} exceeds maximum of {String27.Size} bytes.", nameof(data));
+            throw new InvalidDataException($"Volume name length must be between 1 and {String27.Size} bytes.");
         }
 
         // drVN + 1 (bytes) characters of volume name
@@ -216,6 +194,13 @@ public struct MfsMasterDirectoryBlock
         // zeroes.
         VolumeName = new String27(data.Slice(offset, volumeNameLength));
         offset += String27.Size;
+
+        ValidateFields(
+            NumberOfAllocationBlocks,
+            AllocationBlockSize,
+            ClumpSize,
+            FreeAllocationBlocks,
+            VolumeName);
 
         Debug.Assert(offset == data.Length, "Did not read all Master Directory Block data.");
     }
@@ -263,6 +248,13 @@ public struct MfsMasterDirectoryBlock
         NextFileNumber = nextFileNumber;
         FreeAllocationBlocks = freeAllocationBlocks;
         VolumeName = volumeName;
+
+        ValidateFields(
+            numberOfAllocationBlocks,
+            allocationBlockSize,
+            clumpSize,
+            freeAllocationBlocks,
+            volumeName);
     }
 
     /// <summary>
@@ -340,5 +332,41 @@ public struct MfsMasterDirectoryBlock
         offset += String27.Size;
 
         Debug.Assert(offset == Size, "Did not write all Master Directory Block data.");
+    }
+
+    private static void ValidateFields(
+        ushort numberOfAllocationBlocks,
+        uint allocationBlockSize,
+        uint clumpSize,
+        ushort freeAllocationBlocks,
+        String27 volumeName)
+    {
+        if (numberOfAllocationBlocks > 4094)
+        {
+            throw new InvalidDataException(
+                $"Number of allocation blocks ({numberOfAllocationBlocks}) exceeds the 12-bit allocation block map limit of 4094.");
+        }
+
+        if (allocationBlockSize == 0 || allocationBlockSize % 512 != 0)
+        {
+            throw new InvalidDataException("Allocation block size must be a positive multiple of 512.");
+        }
+
+        if (clumpSize != 0 && clumpSize % allocationBlockSize != 0)
+        {
+            throw new InvalidDataException(
+                $"Clump size ({clumpSize}) must be a multiple of the allocation block size ({allocationBlockSize}).");
+        }
+
+        if (freeAllocationBlocks > numberOfAllocationBlocks)
+        {
+            throw new InvalidDataException(
+                $"Free allocation blocks ({freeAllocationBlocks}) exceeds total number of allocation blocks ({numberOfAllocationBlocks}).");
+        }
+
+        if (volumeName.Length == 0)
+        {
+            throw new InvalidDataException("Volume name must not be empty.");
+        }
     }
 }

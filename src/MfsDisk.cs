@@ -33,9 +33,10 @@ public class MfsDisk
                 if (partitionEntry.Type.Equals("Apple_MFS"u8))
                 {
                     // Found the MFS partition - add a volume for it.
-                    var mfsStartOffset = (long)partitionEntry.PartitionStartBlock * 512;
+                    var mfsStartOffset = checked((long)partitionEntry.PartitionStartBlock * VolumeLayout.SectorSize);
+                    var mfsLength = checked((long)partitionEntry.PartitionBlockCount * VolumeLayout.SectorSize);
                     stream.Seek(mfsStartOffset, SeekOrigin.Begin);
-                    Volumes.Add(new MfsVolume(stream));
+                    Volumes.Add(new MfsVolume(stream, mfsLength));
                 }
             }
         }

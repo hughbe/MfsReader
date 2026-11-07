@@ -37,13 +37,13 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void Volume_TruncatedMdb_ThrowsEndOfStreamException()
+    public void Volume_TruncatedMdb_ThrowsInvalidDataException()
     {
         // Create a stream with boot blocks (1024 bytes) but only partial MDB data.
-        // MfsVolume seeks to offset 1024 then tries to read 512 bytes.
-        var data = new byte[1200]; // Only 176 bytes after offset 1024, not enough for 512
+        // Only 176 bytes follow offset 1024, not enough for the 512-byte MDB sector.
+        var data = new byte[1200];
         using var ms = new MemoryStream(data);
-        Assert.Throws<EndOfStreamException>(() => new MfsVolume(ms));
+        Assert.Throws<InvalidDataException>(() => new MfsVolume(ms));
     }
 
     #endregion
@@ -144,7 +144,7 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void Volume_ReadBlock_OffsetOutOfRange_ThrowsInvalidDataException()
+    public void Volume_AllocationMapPointerOutOfRange_ThrowsInvalidDataException()
     {
         // Use a larger data fork (2000 bytes) so the disk has 2 allocation blocks.
         // This ensures NumberOfAllocationBlocks=2, maxBlocks=2, so the cycle detection
@@ -163,15 +163,15 @@ public class MfsCoverageTests
         BinaryPrimitives.WriteUInt32BigEndian(diskBytes.AsSpan(1560), 5000);
         BinaryPrimitives.WriteUInt32BigEndian(diskBytes.AsSpan(1564), 8192);
 
+        // The bad pointer is only an error once the chain is followed.
         using var ms = new MemoryStream(diskBytes);
         var volume = new MfsVolume(ms);
-        var entries = volume.GetEntries().ToList();
-
-        Assert.Throws<InvalidDataException>(() => volume.GetDataForkData(entries[0]));
+        MfsFileDirectoryBlock entry = Assert.Single(volume.GetEntries());
+        Assert.Throws<InvalidDataException>(() => volume.GetDataForkData(entry));
     }
 
     [Fact]
-    public void Volume_ReadBlock_TruncatedRead_ThrowsEndOfStreamException()
+    public void Volume_TruncatedAllocationRegion_ThrowsInvalidDataException()
     {
         byte[] fullDisk = CreateValidDiskImage(dataForkSize: 100);
 
@@ -182,10 +182,7 @@ public class MfsCoverageTests
         byte[] truncated = fullDisk[..truncateAt];
 
         using var ms = new MemoryStream(truncated);
-        var volume = new MfsVolume(ms);
-        var entries = volume.GetEntries().ToList();
-
-        Assert.Throws<EndOfStreamException>(() => volume.GetDataForkData(entries[0]));
+        Assert.Throws<InvalidDataException>(() => new MfsVolume(ms));
     }
 
     [Fact]
@@ -234,7 +231,7 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void MasterDirectoryBlock_InvalidAllocationBlockSize_Zero_ThrowsArgumentException()
+    public void MasterDirectoryBlock_InvalidAllocationBlockSize_Zero_ThrowsInvalidDataException()
     {
         var data = new byte[MfsMasterDirectoryBlock.Size];
         CreateValidMdb().WriteTo(data);
@@ -242,11 +239,11 @@ public class MfsCoverageTests
         // Set AllocationBlockSize (offset 20) to 0.
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(20), 0);
 
-        Assert.Throws<ArgumentException>("data", () => new MfsMasterDirectoryBlock(data));
+        Assert.Throws<InvalidDataException>(() => new MfsMasterDirectoryBlock(data));
     }
 
     [Fact]
-    public void MasterDirectoryBlock_InvalidAllocationBlockSize_NotMultipleOf512_ThrowsArgumentException()
+    public void MasterDirectoryBlock_InvalidAllocationBlockSize_NotMultipleOf512_ThrowsInvalidDataException()
     {
         var data = new byte[MfsMasterDirectoryBlock.Size];
         CreateValidMdb().WriteTo(data);
@@ -254,11 +251,11 @@ public class MfsCoverageTests
         // Set AllocationBlockSize (offset 20) to 1000 (not a multiple of 512).
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(20), 1000);
 
-        Assert.Throws<ArgumentException>("data", () => new MfsMasterDirectoryBlock(data));
+        Assert.Throws<InvalidDataException>(() => new MfsMasterDirectoryBlock(data));
     }
 
     [Fact]
-    public void MasterDirectoryBlock_VolumeNameTooLong_ThrowsArgumentException()
+    public void MasterDirectoryBlock_VolumeNameTooLong_ThrowsInvalidDataException()
     {
         var data = new byte[MfsMasterDirectoryBlock.Size];
         CreateValidMdb().WriteTo(data);
@@ -266,7 +263,7 @@ public class MfsCoverageTests
         // Set volume name length byte (offset 36) to 28 (> String27.Size = 27).
         data[36] = 28;
 
-        Assert.Throws<ArgumentException>("data", () => new MfsMasterDirectoryBlock(data));
+        Assert.Throws<InvalidDataException>(() => new MfsMasterDirectoryBlock(data));
     }
 
     [Fact]
@@ -290,15 +287,15 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void FileDirectoryBlock_InvalidVersion_ThrowsArgumentException()
+    public void FileDirectoryBlock_NonZeroVersion_IsPreserved()
     {
         byte[] data = CreateValidFdbBytes();
 
         // Set version byte (offset 1) to non-zero.
         data[1] = 0x01;
 
-        Assert.Throws<ArgumentException>("data",
-            () => new MfsFileDirectoryBlock(data, out _));
+        var entry = new MfsFileDirectoryBlock(data, out _);
+        Assert.Equal(1, entry.Version);
     }
 
     [Fact]
@@ -384,8 +381,8 @@ public class MfsCoverageTests
     [Fact]
     public void AllocationBlockMap_GetNextAllocationBlock_ValidIndex_ReturnsValue()
     {
-        var abm = new MfsAllocationBlockMap(new ushort[] { 0, 0, 42 });
-        Assert.Equal(42, abm.GetNextAllocationBlock(2));
+        var abm = new MfsAllocationBlockMap(new ushort[] { 0, 0, 3, 1 });
+        Assert.Equal(3, abm.GetNextAllocationBlock(2));
     }
 
     #endregion
@@ -472,11 +469,18 @@ public class MfsCoverageTests
     }
 
     [Fact]
-    public void DiskWriter_WriteTo_NoFiles_ThrowsInvalidOperationException()
+    public void DiskWriter_WriteTo_NoFiles_WritesEmptyVolume()
     {
         var writer = new MfsDiskWriter();
         using var ms = new MemoryStream();
-        Assert.Throws<InvalidOperationException>(() => writer.WriteTo(ms));
+        writer.WriteTo(ms, "Blank");
+
+        ms.Position = 0;
+        var volume = new MfsVolume(ms);
+        Assert.Equal("Blank", volume.MasterDirectoryBlock.VolumeName.ToString());
+        Assert.Equal(0, volume.MasterDirectoryBlock.NumberOfFiles);
+        Assert.Equal(0, volume.MasterDirectoryBlock.NumberOfAllocationBlocks);
+        Assert.Empty(volume.GetEntries());
     }
 
     [Fact]
@@ -527,7 +531,7 @@ public class MfsCoverageTests
     #region AllocationBlockMap Truncated Read
 
     [Fact]
-    public void AllocationBlockMap_TruncatedRead_ThrowsEndOfStreamException()
+    public void AllocationBlockMap_TruncatedVolume_ThrowsInvalidDataException()
     {
         // Create a MDB with 300 allocation blocks so the ABM spans 2+ sectors.
         // ABM bytes = (300 * 3 + 1) / 2 = 450. First sector has 448 bytes available.
@@ -553,7 +557,7 @@ public class MfsCoverageTests
         mdb.WriteTo(data.AsSpan(1024, MfsMasterDirectoryBlock.Size));
 
         using var ms = new MemoryStream(data);
-        Assert.Throws<EndOfStreamException>(() => new MfsVolume(ms));
+        Assert.Throws<InvalidDataException>(() => new MfsVolume(ms));
     }
 
     #endregion
