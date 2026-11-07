@@ -106,7 +106,7 @@ foreach (var volume in disk.Volumes)
         
         // Get resource fork as byte array
         byte[] resourceFork = volume.GetResourceForkData(file);
-        File.WriteAllBytes($"{file.Name}.rsrc", resourceFork);
+        File.WriteAllBytes($"{file.Name}.res", resourceFork);
     }
 }
 ```
@@ -135,7 +135,7 @@ writer.AddFile("Read Me", "TEXT", "ttxt",
 
 writer.AddFile("MyApp", "APPL", "MYAP",
     dataFork: File.ReadAllBytes("myapp.data"),
-    resourceFork: File.ReadAllBytes("myapp.rsrc"));
+    resourceFork: File.ReadAllBytes("myapp.res"));
 
 // Write the disk image to a stream
 using var stream = File.Create("output.dsk");
@@ -245,7 +245,13 @@ A command-line tool for inspecting and extracting MFS disk images.
 ### Install/Build
 
 ```sh
-dotnet build dumper/MfsDumper.csproj -c Release
+dotnet build dumper/MFSDumper.csproj -c Release
+```
+
+The examples below show the command as `mfs-dumper`. The built executable is named `MFSDumper`; you can also run any command straight from source, e.g.:
+
+```sh
+dotnet run --project dumper -- list /path/to/disk.dsk
 ```
 
 ### Commands
@@ -344,9 +350,10 @@ Copyright (c) 2026 Hugh Bellamy
 
 The Macintosh File System (MFS) was the original file system for the Macintosh computer, introduced in 1984. Key characteristics:
 
-- Flat file structure (no subdirectories/folders)
+- Flat file structure (no real subdirectories; the Finder showed folders using a per-file folder number)
 - Support for data and resource forks
-- Maximum of 128 files per volume
+- File names up to 255 characters, though Inside Macintosh recommends keeping them to 31 for compatibility with the 128K ROM
+- The number of files is limited by the size of the file directory, and the allocation block map uses 12-bit entries, which caps a volume at a few thousand allocation blocks
 - Primarily used on 400K floppy disks
 - Replaced by HFS (Hierarchical File System) in 1985
 
