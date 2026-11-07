@@ -52,7 +52,7 @@ sealed class HeaderCommand : AsyncCommand<InputSettings>
         var input = new FileInfo(settings.Input);
         if (!input.Exists)
         {
-            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {input.FullName}");
+            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {Markup.Escape(input.FullName)}");
             return Task.FromResult(-1);
         }
 
@@ -62,7 +62,7 @@ sealed class HeaderCommand : AsyncCommand<InputSettings>
         AnsiConsole.MarkupLine($"[green]Found[/] {disk.Volumes.Count} volume(s) on disk.");
         AnsiConsole.WriteLine();
 
-        var volumes = GetSelectedVolumes(disk, settings.VolumeIndex);
+        var volumes = VolumeSelection.Get(disk, settings.VolumeIndex);
         if (volumes == null)
             return Task.FromResult(-1);
 
@@ -71,7 +71,7 @@ sealed class HeaderCommand : AsyncCommand<InputSettings>
         {
             var mdb = volume.MasterDirectoryBlock;
 
-            AnsiConsole.MarkupLine($"[bold underline]Volume {volumeIndex}: {mdb.VolumeName}[/]");
+            AnsiConsole.MarkupLine($"[bold underline]Volume {volumeIndex}: {Markup.Escape(mdb.VolumeName)}[/]");
             AnsiConsole.WriteLine();
 
             var table = new Table();
@@ -80,7 +80,7 @@ sealed class HeaderCommand : AsyncCommand<InputSettings>
             table.Border = TableBorder.Rounded;
 
             table.AddRow("Signature", $"0x{mdb.Signature:X4}");
-            table.AddRow("Volume Name", mdb.VolumeName);
+            table.AddRow("Volume Name", Markup.Escape(mdb.VolumeName));
             table.AddRow("Creation Date", mdb.CreationDate.ToString("yyyy-MM-dd HH:mm:ss"));
             table.AddRow("Last Backup Date", mdb.LastBackupDate.ToString("yyyy-MM-dd HH:mm:ss"));
             table.AddRow("Attributes", mdb.Attributes.ToString());
@@ -112,19 +112,6 @@ sealed class HeaderCommand : AsyncCommand<InputSettings>
         return Task.FromResult(0);
     }
 
-    private static IEnumerable<MfsVolume>? GetSelectedVolumes(MfsDisk disk, int? volumeIndex)
-    {
-        if (volumeIndex.HasValue)
-        {
-            if (volumeIndex < 1 || volumeIndex > disk.Volumes.Count)
-            {
-                AnsiConsole.MarkupLine($"[red]Invalid volume index[/]: {volumeIndex}. Disk has {disk.Volumes.Count} volume(s).");
-                return null;
-            }
-            return [disk.Volumes[volumeIndex.Value - 1]];
-        }
-        return disk.Volumes;
-    }
 
     private static string FormatBytes(long bytes)
     {
@@ -158,7 +145,7 @@ sealed class ListCommand : AsyncCommand<ListSettings>
         var input = new FileInfo(settings.Input);
         if (!input.Exists)
         {
-            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {input.FullName}");
+            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {Markup.Escape(input.FullName)}");
             return Task.FromResult(-1);
         }
 
@@ -168,7 +155,7 @@ sealed class ListCommand : AsyncCommand<ListSettings>
         AnsiConsole.MarkupLine($"[green]Found[/] {disk.Volumes.Count} volume(s) on disk.");
         AnsiConsole.WriteLine();
 
-        var volumes = GetSelectedVolumes(disk, settings.VolumeIndex);
+        var volumes = VolumeSelection.Get(disk, settings.VolumeIndex);
         if (volumes == null)
             return Task.FromResult(-1);
 
@@ -189,7 +176,7 @@ sealed class ListCommand : AsyncCommand<ListSettings>
             var countInfo = filterRegex != null 
                 ? $"{entries.Count} of {allEntries.Count} files" 
                 : $"{entries.Count} files";
-            AnsiConsole.MarkupLine($"[bold underline]Volume: {volume.MasterDirectoryBlock.VolumeName}[/] ({countInfo})");
+            AnsiConsole.MarkupLine($"[bold underline]Volume: {Markup.Escape(volume.MasterDirectoryBlock.VolumeName)}[/] ({countInfo})");
             AnsiConsole.WriteLine();
 
             var table = new Table();
@@ -278,19 +265,6 @@ sealed class ListCommand : AsyncCommand<ListSettings>
         return $"{size:N0} bytes (alloc: {allocatedSize:N0}, block: {firstBlock})";
     }
 
-    private static IEnumerable<MfsVolume>? GetSelectedVolumes(MfsDisk disk, int? volumeIndex)
-    {
-        if (volumeIndex.HasValue)
-        {
-            if (volumeIndex < 1 || volumeIndex > disk.Volumes.Count)
-            {
-                AnsiConsole.MarkupLine($"[red]Invalid volume index[/]: {volumeIndex}. Disk has {disk.Volumes.Count} volume(s).");
-                return null;
-            }
-            return [disk.Volumes[volumeIndex.Value - 1]];
-        }
-        return disk.Volumes;
-    }
 }
 
 sealed class MapSettings : InputSettings
@@ -311,7 +285,7 @@ sealed class MapCommand : AsyncCommand<MapSettings>
         var input = new FileInfo(settings.Input);
         if (!input.Exists)
         {
-            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {input.FullName}");
+            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {Markup.Escape(input.FullName)}");
             return Task.FromResult(-1);
         }
 
@@ -321,7 +295,7 @@ sealed class MapCommand : AsyncCommand<MapSettings>
         AnsiConsole.MarkupLine($"[green]Found[/] {disk.Volumes.Count} volume(s) on disk.");
         AnsiConsole.WriteLine();
 
-        var volumes = GetSelectedVolumes(disk, settings.VolumeIndex);
+        var volumes = VolumeSelection.Get(disk, settings.VolumeIndex);
         if (volumes == null)
             return Task.FromResult(-1);
 
@@ -330,7 +304,7 @@ sealed class MapCommand : AsyncCommand<MapSettings>
             var mdb = volume.MasterDirectoryBlock;
             var map = volume.AllocationBlockMap;
 
-            AnsiConsole.MarkupLine($"[bold underline]Volume: {mdb.VolumeName}[/]");
+            AnsiConsole.MarkupLine($"[bold underline]Volume: {Markup.Escape(mdb.VolumeName)}[/]");
             AnsiConsole.MarkupLine($"Allocation blocks: {mdb.NumberOfAllocationBlocks} (block size: {mdb.AllocationBlockSize} bytes)");
             AnsiConsole.MarkupLine($"Free blocks: {mdb.FreeAllocationBlocks}");
             AnsiConsole.WriteLine();
@@ -401,19 +375,6 @@ sealed class MapCommand : AsyncCommand<MapSettings>
         return Task.FromResult(0);
     }
 
-    private static IEnumerable<MfsVolume>? GetSelectedVolumes(MfsDisk disk, int? volumeIndex)
-    {
-        if (volumeIndex.HasValue)
-        {
-            if (volumeIndex < 1 || volumeIndex > disk.Volumes.Count)
-            {
-                AnsiConsole.MarkupLine($"[red]Invalid volume index[/]: {volumeIndex}. Disk has {disk.Volumes.Count} volume(s).");
-                return null;
-            }
-            return [disk.Volumes[volumeIndex.Value - 1]];
-        }
-        return disk.Volumes;
-    }
 }
 
 sealed class HexDumpSettings : InputSettings
@@ -445,41 +406,58 @@ sealed class HexDumpCommand : AsyncCommand<HexDumpSettings>
         var input = new FileInfo(settings.Input);
         if (!input.Exists)
         {
-            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {input.FullName}");
+            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {Markup.Escape(input.FullName)}");
+            return Task.FromResult(-1);
+        }
+
+        if (settings.Fork is not ("data" or "resource" or "both"))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid fork[/]: {Markup.Escape(settings.Fork)}. Use 'data', 'resource' or 'both'.");
+            return Task.FromResult(-1);
+        }
+
+        if (settings.Offset < 0 || settings.MaxBytes < 1)
+        {
+            AnsiConsole.MarkupLine("[red]--offset must not be negative and --bytes must be at least 1.[/]");
             return Task.FromResult(-1);
         }
 
         using var stream = input.OpenRead();
         var disk = new MfsDisk(stream);
 
+        var volumes = VolumeSelection.Get(disk, settings.VolumeIndex);
+        if (volumes == null)
+            return Task.FromResult(-1);
+
         MfsVolume? targetVolume = null;
-        MfsFileDirectoryBlock? targetEntry = null;
+        MfsFileDirectoryBlock targetEntry = default;
 
-        var volumes = settings.VolumeIndex.HasValue 
-            ? [disk.Volumes[settings.VolumeIndex.Value - 1]] 
-            : disk.Volumes;
-
+        // FirstOrDefault can't signal "not found" for a struct, so search explicitly.
         foreach (var volume in volumes)
         {
-            var entry = volume.GetEntries().FirstOrDefault(e =>
-                string.Equals(e.Name, settings.FileName, StringComparison.OrdinalIgnoreCase));
-            if (entry.Name != null)
+            foreach (var candidate in volume.GetEntries())
             {
-                targetVolume = volume;
-                targetEntry = entry;
-                break;
+                if (string.Equals(candidate.Name, settings.FileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetVolume = volume;
+                    targetEntry = candidate;
+                    break;
+                }
             }
+
+            if (targetVolume != null)
+                break;
         }
 
-        if (targetVolume == null || targetEntry == null)
+        if (targetVolume == null)
         {
-            AnsiConsole.MarkupLine($"[red]File not found[/]: {settings.FileName}");
+            AnsiConsole.MarkupLine($"[red]File not found[/]: {Markup.Escape(settings.FileName)}");
             return Task.FromResult(-1);
         }
 
-        var entry2 = targetEntry.Value;
-        AnsiConsole.MarkupLine($"[bold]File:[/] {entry2.Name}");
-        AnsiConsole.MarkupLine($"[bold]Type:[/] {entry2.FileType} / {entry2.Creator}");
+        var entry2 = targetEntry;
+        AnsiConsole.MarkupLine($"[bold]File:[/] {Markup.Escape(entry2.Name)}");
+        AnsiConsole.MarkupLine($"[bold]Type:[/] {Markup.Escape(entry2.FileType)} / {Markup.Escape(entry2.Creator)}");
         AnsiConsole.WriteLine();
 
         bool dumpData = settings.Fork is "data" or "both";
@@ -601,7 +579,7 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         var input = new FileInfo(settings.Input);
         if (!input.Exists)
         {
-            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {input.FullName}");
+            AnsiConsole.MarkupLine($"[red]Input file not found[/]: {Markup.Escape(input.FullName)}");
             return -1;
         }
 
@@ -622,7 +600,7 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
 
         AnsiConsole.MarkupLine($"[green]Found[/] {disk.Volumes.Count} volume(s) on disk.");
 
-        var volumes = GetSelectedVolumes(disk, settings.VolumeIndex);
+        var volumes = VolumeSelection.Get(disk, settings.VolumeIndex);
         if (volumes == null)
             return -1;
 
@@ -646,7 +624,7 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
             var countInfo = filterRegex != null 
                 ? $"{entries.Count} of {allEntries.Count}" 
                 : entries.Count.ToString();
-            AnsiConsole.MarkupLine($"[green]Processing[/] {countInfo} items in volume '[bold]{volume.MasterDirectoryBlock.VolumeName}[/]'.");
+            AnsiConsole.MarkupLine($"[green]Processing[/] {countInfo} items in volume '[bold]{Markup.Escape(volume.MasterDirectoryBlock.VolumeName)}[/]'.");
 
             foreach (var entry in entries)
             {
@@ -667,13 +645,17 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
                     var dataPath = basePath + ".data";
                     if (settings.DryRun)
                     {
-                        AnsiConsole.MarkupLine($"  [cyan]Would extract[/] data fork: {Markup.Escape(entry.Name)} → {Path.GetFileName(dataPath)} ({entry.DataForkSize:N0} bytes)");
+                        AnsiConsole.MarkupLine($"  [cyan]Would extract[/] data fork: {Markup.Escape(entry.Name)} → {Markup.Escape(Path.GetFileName(dataPath))} ({entry.DataForkSize:N0} bytes)");
                     }
                     else
                     {
-                        await using var outputStream = File.Create(dataPath);
-                        var bytes = volume.GetFileData(entry, outputStream, MfsForkType.DataFork);
-                        AnsiConsole.MarkupLine($"  [green]✓[/] Data fork: {Markup.Escape(entry.Name)} → {Path.GetFileName(dataPath)} ({bytes:N0} bytes)");
+                        int bytes;
+                        await using (var outputStream = File.Create(dataPath))
+                        {
+                            bytes = volume.GetFileData(entry, outputStream, MfsForkType.DataFork);
+                        }
+
+                        AnsiConsole.MarkupLine($"  [green]✓[/] Data fork: {Markup.Escape(entry.Name)} → {Markup.Escape(Path.GetFileName(dataPath))} ({bytes:N0} bytes)");
                         if (settings.PreserveDates)
                             TrySetTimestamps(dataPath, entry);
                         totalBytes += bytes;
@@ -686,13 +668,17 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
                     var resPath = basePath + ".res";
                     if (settings.DryRun)
                     {
-                        AnsiConsole.MarkupLine($"  [cyan]Would extract[/] resource fork: {Markup.Escape(entry.Name)} → {Path.GetFileName(resPath)} ({entry.ResourceForkSize:N0} bytes)");
+                        AnsiConsole.MarkupLine($"  [cyan]Would extract[/] resource fork: {Markup.Escape(entry.Name)} → {Markup.Escape(Path.GetFileName(resPath))} ({entry.ResourceForkSize:N0} bytes)");
                     }
                     else
                     {
-                        await using var outputStream = File.Create(resPath);
-                        var bytes = volume.GetFileData(entry, outputStream, MfsForkType.ResourceFork);
-                        AnsiConsole.MarkupLine($"  [green]✓[/] Resource fork: {Markup.Escape(entry.Name)} → {Path.GetFileName(resPath)} ({bytes:N0} bytes)");
+                        int bytes;
+                        await using (var outputStream = File.Create(resPath))
+                        {
+                            bytes = volume.GetFileData(entry, outputStream, MfsForkType.ResourceFork);
+                        }
+
+                        AnsiConsole.MarkupLine($"  [green]✓[/] Resource fork: {Markup.Escape(entry.Name)} → {Markup.Escape(Path.GetFileName(resPath))} ({bytes:N0} bytes)");
                         if (settings.PreserveDates)
                             TrySetTimestamps(resPath, entry);
                         totalBytes += bytes;
@@ -709,24 +695,11 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         }
         else
         {
-            AnsiConsole.MarkupLine($"[green]Extraction complete[/]: {totalFiles} file(s), {totalBytes:N0} bytes → {outputDir.FullName}");
+            AnsiConsole.MarkupLine($"[green]Extraction complete[/]: {totalFiles} file(s), {totalBytes:N0} bytes → {Markup.Escape(outputDir.FullName)}");
         }
         return 0;
     }
 
-    private static IEnumerable<MfsVolume>? GetSelectedVolumes(MfsDisk disk, int? volumeIndex)
-    {
-        if (volumeIndex.HasValue)
-        {
-            if (volumeIndex < 1 || volumeIndex > disk.Volumes.Count)
-            {
-                AnsiConsole.MarkupLine($"[red]Invalid volume index[/]: {volumeIndex}. Disk has {disk.Volumes.Count} volume(s).");
-                return null;
-            }
-            return [disk.Volumes[volumeIndex.Value - 1]];
-        }
-        return disk.Volumes;
-    }
 
     private static void TrySetTimestamps(string path, MfsFileDirectoryBlock entry)
     {
@@ -750,5 +723,28 @@ sealed class ExtractCommand : AsyncCommand<ExtractSettings>
         }
 
         return name;
+    }
+}
+
+/// <summary>
+/// Resolves the optional 1-based --volume option shared by every command.
+/// </summary>
+static class VolumeSelection
+{
+    /// <returns>The selected volumes, or null (after printing an error) if the index is invalid.</returns>
+    public static IReadOnlyList<MfsVolume>? Get(MfsDisk disk, int? volumeIndex)
+    {
+        if (!volumeIndex.HasValue)
+        {
+            return disk.Volumes;
+        }
+
+        if (volumeIndex < 1 || volumeIndex > disk.Volumes.Count)
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid volume index[/]: {volumeIndex}. Disk has {disk.Volumes.Count} volume(s).");
+            return null;
+        }
+
+        return [disk.Volumes[volumeIndex.Value - 1]];
     }
 }
