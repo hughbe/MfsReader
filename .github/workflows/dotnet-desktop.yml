@@ -1,0 +1,102 @@
+# Builds and tests MfsReader on every push and pull request, on Linux, Windows and macOS.
+#
+# Adapted from the ".NET Core Desktop" starter workflow. MfsReader is a class library with a
+# console dumper rather than a WPF/WinForms app, so the Windows Application Packaging (MSIX)
+# build and the pfx signing steps from the template are not needed and have been removed. In
+# their place the workflow collects code coverage and packs the NuGet package as a build
+# artifact. No secrets are required.
+#
+# Running on a case-sensitive file system (Linux) matters here: it catches project and
+# solution references whose casing differs from the file on disk, which build fine on macOS
+# and Windows.
+
+name: .NET Core Desktop
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    # No branch filter, so pull requests stacked on another branch are also checked.
+
+# The workflow only reads the repository.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request supersedes the run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  Solution_Name: MfsReader.sln
+  Test_Project_Path: tests/MfsReader.Tests.csproj
+  Library_Project_Path: src/MfsReader.csproj
+
+jobs:
+
+  build:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        configuration: [ Debug, Release ]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        # One shell on every platform (Git Bash on Windows) so the commands below are identical.
+        shell: bash
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Install the .NET SDK. The projects target net9.0.
+    - name: Install .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+
+    # Restore everything in the solution: the library, tests, dumper and benchmarks.
+    - name: Restore
+      run: dotnet restore "${{ env.Solution_Name }}"
+
+    # Build the whole solution so the dumper and benchmarks are kept compiling too.
+    - name: Build
+      run: dotnet build "${{ env.Solution_Name }}" --no-restore --configuration ${{ matrix.configuration }}
+
+    # Execute the unit tests and collect line and branch coverage (Cobertura).
+    - name: Execute unit tests
+      run: >
+        dotnet test "${{ env.Test_Project_Path }}"
+        --no-build
+        --configuration ${{ matrix.configuration }}
+        --settings tests/coverlet.runsettings
+        --collect:"XPlat Code Coverage"
+        --results-directory TestResults
+
+    # Upload the coverage report once per run: https://github.com/marketplace/actions/upload-a-build-artifact
+    - name: Upload coverage report
+      if: matrix.os == 'ubuntu-latest' && matrix.configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: Coverage report
+        path: TestResults/**/coverage.cobertura.xml
+        if-no-files-found: error
+
+    # Pack the library (.nupkg and symbols .snupkg) from the Release build.
+    - name: Pack NuGet package
+      if: matrix.os == 'ubuntu-latest' && matrix.configuration == 'Release'
+      run: dotnet pack "${{ env.Library_Project_Path }}" --no-build --configuration Release --output artifacts
+
+    - name: Upload NuGet package
+      if: matrix.os == 'ubuntu-latest' && matrix.configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: NuGet package
+        path: artifacts/*.*nupkg
+        if-no-files-found: error
