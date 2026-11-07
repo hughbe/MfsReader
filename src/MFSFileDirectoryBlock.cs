@@ -20,7 +20,8 @@ public struct MfsFileDirectoryBlock
     public MfsFileDirectoryBlockFlags Flags { get; }
 
     /// <summary>
-    /// Gets the version number of the file directory block.
+    /// Gets the version number of the file directory block. This is 0 on volumes
+    /// written by the Mac OS; other values are preserved but not interpreted.
     /// </summary>
     public byte Version { get; }
 
@@ -127,13 +128,10 @@ public struct MfsFileDirectoryBlock
         offset += 1;
 
         // fITyp (byte) version number
-        // Version. Always 0x00.
+        // Version. Always 0x00 on volumes written by the Mac OS, but it is a
+        // hint rather than a format discriminator, so other values are
+        // surfaced through the Version property instead of rejecting the entry.
         Version = data[offset];
-        if (Version != 0x00)
-        {
-            throw new ArgumentException("Unsupported MFS file directory block version.", nameof(data));
-        }
-
         offset += 1;
 
         // flUsrWds (16 bytes) information used by the Finder
@@ -186,7 +184,7 @@ public struct MfsFileDirectoryBlock
         DataForkSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
-        // flPyLen (long word) physical end-of-file of data fork 
+        // flPyLen (long word) physical end-of-file of data fork
         // Data fork allocated space, in bytes. This is the total size
         // of all the allocation blocks belonging to the data fork,
         // including any space that isn't used.
@@ -199,37 +197,20 @@ public struct MfsFileDirectoryBlock
         ResourceForkAllocationBlock = BinaryPrimitives.ReadUInt16BigEndian(data.Slice(offset, 2));
         offset += 2;
 
-        // fIRLgLen (long word) logical end-of-file of resource fork 
+        // fIRLgLen (long word) logical end-of-file of resource fork
         // Resource fork size, in bytes.
         ResourceForkSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
-        // fIRPyLen (long word) physical end-of-file of resource fork 
+        // fIRPyLen (long word) physical end-of-file of resource fork
         // Resource fork allocated space, in bytes. This is the total
         // size of all the allocation blocks belonging to the resource
         // fork, including any space that isn't used.
         ResourceForkAllocatedSize = BinaryPrimitives.ReadUInt32BigEndian(data.Slice(offset, 4));
         offset += 4;
 
-        if (DataForkSize > DataForkAllocatedSize)
-        {
-            throw new InvalidDataException($"Data fork logical size ({DataForkSize}) exceeds allocated size ({DataForkAllocatedSize}).");
-        }
-
-        if (ResourceForkSize > ResourceForkAllocatedSize)
-        {
-            throw new InvalidDataException($"Resource fork logical size ({ResourceForkSize}) exceeds allocated size ({ResourceForkAllocatedSize}).");
-        }
-
-        if (DataForkSize > 0 && DataForkAllocationBlock == 0)
-        {
-            throw new InvalidDataException("Data fork has non-zero size but no starting allocation block.");
-        }
-
-        if (ResourceForkSize > 0 && ResourceForkAllocationBlock == 0)
-        {
-            throw new InvalidDataException("Resource fork has non-zero size but no starting allocation block.");
-        }
+        ValidateFork("Data", DataForkAllocationBlock, DataForkSize, DataForkAllocatedSize);
+        ValidateFork("Resource", ResourceForkAllocationBlock, ResourceForkSize, ResourceForkAllocatedSize);
 
         // fICrDat (long word) date and time of creation
         // Creation date, in seconds since midnight January 1st 1904.
@@ -245,6 +226,16 @@ public struct MfsFileDirectoryBlock
         var nameLength = data[offset];
         offset += 1;
 
+        if (nameLength == 0)
+        {
+            throw new InvalidDataException("File name must not be empty.");
+        }
+
+        if (nameLength > data.Length - offset)
+        {
+            throw new InvalidDataException("File name extends beyond the directory block boundary.");
+        }
+
         // flNam + 1 (bytes) characters of file name
         // File name. This field has a variable length and contains a
         // Pascal string. The first byte indicates the number of characters
@@ -253,8 +244,10 @@ public struct MfsFileDirectoryBlock
         Name = new String255(data.Slice(offset, nameLength));
         offset += nameLength;
 
+        // Use the declared length rather than Name.Length: a stored name may contain
+        // an embedded null byte, which truncates Name but not the bytes consumed.
         bytesRead = offset;
-        Debug.Assert(offset == MinSize + Name.Length, "Did not read the expected number of bytes for the file directory block.");
+        Debug.Assert(offset == MinSize + nameLength, "Did not read the expected number of bytes for the file directory block.");
     }
 
     /// <summary>
@@ -310,6 +303,13 @@ public struct MfsFileDirectoryBlock
         CreationDate = creationDate;
         LastModificationDate = lastModificationDate;
         Name = name;
+
+        ValidateFork("Data", dataForkAllocationBlock, dataForkSize, dataForkAllocatedSize);
+        ValidateFork("Resource", resourceForkAllocationBlock, resourceForkSize, resourceForkAllocatedSize);
+        if (name.Length == 0)
+        {
+            throw new InvalidDataException("File name must not be empty.");
+        }
     }
 
     /// <summary>
@@ -406,5 +406,24 @@ public struct MfsFileDirectoryBlock
 
         bytesWritten = offset;
         Debug.Assert(offset == MinSize + nameLength, "Did not write the expected number of bytes for the file directory block.");
+    }
+
+    private static void ValidateFork(
+        string forkName,
+        ushort allocationBlock,
+        uint logicalSize,
+        uint allocatedSize)
+    {
+        if (logicalSize > allocatedSize)
+        {
+            throw new InvalidDataException(
+                $"{forkName} fork logical size ({logicalSize}) exceeds allocated size ({allocatedSize}).");
+        }
+
+        if (logicalSize > 0 && allocationBlock == 0)
+        {
+            throw new InvalidDataException(
+                $"{forkName} fork has non-zero size but no starting allocation block.");
+        }
     }
 }

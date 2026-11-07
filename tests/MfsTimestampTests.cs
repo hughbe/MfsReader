@@ -37,10 +37,34 @@ public class MfsTimestampTests
     [Fact]
     public void FromDateTime_Roundtrips()
     {
-        var dt = new DateTime(2025, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        var dt = new DateTime(2025, 6, 15, 12, 30, 0, DateTimeKind.Unspecified);
         var ts = MfsTimestamp.FromDateTime(dt);
         var roundtripped = ts.ToDateTime();
         Assert.Equal(dt, roundtripped);
+    }
+
+    [Fact]
+    public void ToDateTime_ReturnsUnspecifiedKind_BecauseMacTimeIsLocalWallClock()
+    {
+        Assert.Equal(DateTimeKind.Unspecified, new MfsTimestamp(3_000_000_000u).ToDateTime().Kind);
+    }
+
+    [Fact]
+    public void FromDateTime_LocalAndUnspecified_AreUsedAsWallClock()
+    {
+        var wallClock = new DateTime(2025, 6, 15, 12, 30, 0);
+        var expected = MfsTimestamp.FromDateTime(DateTime.SpecifyKind(wallClock, DateTimeKind.Unspecified));
+
+        Assert.Equal(expected, MfsTimestamp.FromDateTime(DateTime.SpecifyKind(wallClock, DateTimeKind.Local)));
+    }
+
+    [Fact]
+    public void FromDateTime_Utc_IsConvertedToLocalWallClock()
+    {
+        var utc = new DateTime(2025, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        var expected = MfsTimestamp.FromDateTime(DateTime.SpecifyKind(utc.ToLocalTime(), DateTimeKind.Unspecified));
+
+        Assert.Equal(expected, MfsTimestamp.FromDateTime(utc));
     }
 
     [Fact]

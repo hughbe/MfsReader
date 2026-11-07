@@ -80,12 +80,7 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
             return false;
         }
 
-        for (int i = 0; i < length; i++)
-        {
-            destination[i] = (char)span[i];
-        }
-
-        charsWritten = length;
+        charsWritten = MacRomanEncoding.GetChars(span[..length], destination);
         return true;
     }
 
@@ -102,7 +97,7 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
         ReadOnlySpan<byte> span = AsReadOnlySpan();
         int length = Length;
 
-        return Encoding.ASCII.GetString(span[..length]);
+        return MacRomanEncoding.GetString(span[..length]);
     }
 
     /// <summary>
@@ -118,16 +113,16 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
             return false;
         }
 
-        ReadOnlySpan<byte> span = AsReadOnlySpan();
-        for (int i = 0; i < length; i++)
+        Span<byte> encoded = stackalloc byte[Size];
+        try
         {
-            if ((char)span[i] != other[i])
-            {
-                return false;
-            }
+            MacRomanEncoding.GetBytes(other, encoded);
+            return AsReadOnlySpan()[..length].SequenceEqual(encoded[..length]);
         }
-
-        return true;
+        catch (EncoderFallbackException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -178,17 +173,14 @@ public struct String4 : ISpanFormattable, IEquatable<String4>
     /// <exception cref="ArgumentException">Thrown when the value is longer than <see cref="Size"/> characters.</exception>
     public static String4 FromString(ReadOnlySpan<char> value)
     {
-        if (value.Length > Size)
+        int byteCount = MacRomanEncoding.GetByteCount(value);
+        if (byteCount > Size)
         {
-            throw new ArgumentException($"Value must be at most {Size} characters long.", nameof(value));
+            throw new ArgumentException($"Value must be at most {Size} bytes when encoded as Mac OS Roman.", nameof(value));
         }
 
         var result = new String4();
-        var span = result.AsSpan();
-        for (int i = 0; i < value.Length; i++)
-        {
-            span[i] = (byte)value[i];
-        }
+        MacRomanEncoding.GetBytes(value, result.AsSpan());
 
         return result;
     }

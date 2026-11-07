@@ -1,12 +1,17 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace MfsReader;
 
 /// <summary>
-/// Represents an MFS timestamp, stored as seconds since the MacOS epoch (January 1, 1904 00:00:00 UTC).
+/// Represents an MFS timestamp, stored as seconds since midnight, January 1, 1904.
 /// </summary>
+/// <remarks>
+/// Classic Mac OS stores the local wall-clock time of the machine that wrote the value,
+/// with no time zone information. <see cref="ToDateTime"/> therefore returns a
+/// <see cref="DateTime"/> with <see cref="DateTimeKind.Unspecified"/> that holds that
+/// wall-clock time; it is not UTC and must not be passed to <see cref="DateTime.ToLocalTime"/>.
+/// </remarks>
 public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsTimestamp>, IFormattable
 {
     /// <summary>
@@ -15,9 +20,13 @@ public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsT
     public const int Size = 4;
 
     /// <summary>
-    /// The MacOS epoch (January 1, 1904 00:00:00 UTC).
+    /// The MacOS epoch (January 1, 1904 00:00:00, wall-clock time).
     /// </summary>
-    private static readonly DateTime MacOSEpoch = new(1904, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime MacOSEpoch = new(1904, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
+    // 1904-01-01 as DateTime ticks. A literal rather than MacOSEpoch.Ticks so the JIT can
+    // fold it; it is verified against MacOSEpoch by the unit tests.
+    internal const long MacOSEpochTicks = 600_527_520_000_000_000L;
 
     /// <summary>
     /// Gets the raw timestamp value (seconds since the MacOS epoch).
@@ -31,7 +40,10 @@ public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsT
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public MfsTimestamp(ReadOnlySpan<byte> data)
     {
-        Debug.Assert(data.Length >= Size, "Data span must contain at least 4 bytes for the timestamp.");
+        if (data.Length < Size)
+        {
+            throw new ArgumentException($"Data span must contain at least {Size} bytes.", nameof(data));
+        }
 
         Value = BinaryPrimitives.ReadUInt32BigEndian(data);
     }
@@ -49,10 +61,32 @@ public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsT
     /// <summary>
     /// Creates an <see cref="MfsTimestamp"/> from a <see cref="DateTime"/>.
     /// </summary>
-    /// <param name="dateTime">The date and time to convert.</param>
+    /// <param name="dateTime">
+    /// The date and time to convert. <see cref="DateTimeKind.Local"/> and
+    /// <see cref="DateTimeKind.Unspecified"/> values are used as wall-clock time as they are;
+    /// <see cref="DateTimeKind.Utc"/> values are first converted to the local time zone.
+    /// </param>
     /// <returns>The corresponding <see cref="MfsTimestamp"/>.</returns>
-    public static MfsTimestamp FromDateTime(DateTime dateTime) =>
-        new((uint)(dateTime.ToUniversalTime() - MacOSEpoch).TotalSeconds);
+    public static MfsTimestamp FromDateTime(DateTime dateTime)
+    {
+        DateTime wallClock = dateTime.Kind == DateTimeKind.Utc ? dateTime.ToLocalTime() : dateTime;
+
+        // Integer tick arithmetic: no floating point, and no TimeSpan/DateTime temporaries.
+        long ticksSinceEpoch = wallClock.Ticks - MacOSEpochTicks;
+        long seconds = ticksSinceEpoch / TimeSpan.TicksPerSecond;
+        if (ticksSinceEpoch < 0 || seconds > uint.MaxValue)
+        {
+            throw CreateOutOfRangeException();
+        }
+
+        return new MfsTimestamp((uint)seconds);
+    }
+
+    // Built out of line so the message formatting doesn't bloat the conversion.
+    private static ArgumentOutOfRangeException CreateOutOfRangeException() =>
+        new(
+            "dateTime",
+            $"Date must be between {MacOSEpoch:O} and {MacOSEpoch.AddSeconds(uint.MaxValue):O}.");
 
     /// <summary>
     /// Writes the timestamp to the specified span in big-endian format.
@@ -61,15 +95,22 @@ public readonly struct MfsTimestamp : IEquatable<MfsTimestamp>, IComparable<MfsT
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly void WriteTo(Span<byte> data)
     {
+        if (data.Length < Size)
+        {
+            throw new ArgumentException($"Destination must contain at least {Size} bytes.", nameof(data));
+        }
+
         BinaryPrimitives.WriteUInt32BigEndian(data, Value);
     }
 
     /// <summary>
     /// Converts the MFS timestamp to a <see cref="DateTime"/>.
     /// </summary>
-    /// <returns>The corresponding <see cref="DateTime"/> value in UTC.</returns>
+    /// <returns>
+    /// The wall-clock time as a <see cref="DateTime"/> with <see cref="DateTimeKind.Unspecified"/> kind.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public DateTime ToDateTime() => MacOSEpoch.AddSeconds(Value);
+    public DateTime ToDateTime() => new(MacOSEpochTicks + Value * TimeSpan.TicksPerSecond, DateTimeKind.Unspecified);
 
     /// <summary>
     /// Converts the <see cref="MfsTimestamp"/> to a <see cref="DateTime"/>.
