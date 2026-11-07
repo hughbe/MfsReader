@@ -5,7 +5,8 @@ A lightweight, high-performance .NET library for reading classic Macintosh File 
 ## Features
 
 - Read MFS disk images (e.g., 400K floppy disk images)
-- Write MFS disk images from scratch with custom file entries
+- Write MFS disk images from scratch with custom file entries (including empty volumes)
+- Tolerant reader that follows the behaviour of the Macintosh File Manager (see [Format notes](#format-notes))
 - Support for Apple Partition Map (APM) disk images containing MFS partitions
 - Enumerate all files in an MFS volume
 - Extract both data and resource forks from files
@@ -155,10 +156,10 @@ The main class for reading disks that may contain Apple Partition Map entries wi
 
 The main class for reading MFS volumes.
 
-- `MfsVolume(Stream stream)` - Opens an MFS volume from a stream
+- `MfsVolume(Stream stream)` - Opens an MFS volume that starts at the stream's **current position** and runs to its end (position the stream at 0 for a bare disk image)
 - `MasterDirectoryBlock` - Gets the master directory block (volume metadata)
 - `AllocationBlockMap` - Gets the allocation block map of the volume
-- `GetEntries()` - Enumerates all file entries in the volume
+- `GetEntries()` - Enumerates the used file entries in the volume. Returns an `MfsDirectoryEntries` struct whose `foreach` enumerator also lives on the stack, so enumerating allocates nothing (it still implements `IEnumerable<MfsFileDirectoryBlock>`, so LINQ and `ToList()` work). Follows the Mac File Manager: a zero flags byte ends the entries in a directory sector, and the master directory block's file count is only a hint
 - `GetDataForkData(file)` - Reads the data fork as a byte array
 - `GetDataForkData(file, outputStream)` - Streams the data fork to an output stream
 - `GetResourceForkData(file)` - Reads the resource fork as a byte array
@@ -170,8 +171,8 @@ The main class for reading MFS volumes.
 
 Builder-pattern class for creating MFS disk images.
 
-- `AddFile(name, fileType, creator, dataFork?, resourceFork?, flags?, finderFlags?, folderNumber?)` - Adds a file entry to the disk image
-- `WriteTo(stream, volumeName?, allocationBlockSize?)` - Writes the complete MFS disk image to a stream
+- `AddFile(name, fileType, creator, dataFork?, resourceFork?, flags?, finderFlags?, folderNumber?)` - Adds a file entry to the disk image. Names must be unique, ignoring case
+- `WriteTo(stream, volumeName?, allocationBlockSize?)` - Writes the complete MFS disk image to a stream (an empty volume if no files were added). Timestamps are the current local time
 
 ### MfsMasterDirectoryBlock
 
@@ -217,12 +218,37 @@ Represents a file entry in the MFS volume (zero-allocation struct):
 
 ### MfsTimestamp
 
-Represents an MFS timestamp as seconds since the MacOS epoch (January 1, 1904 00:00:00 UTC). Zero-allocation struct that avoids converting to `DateTime` during parsing:
+Represents an MFS timestamp as seconds since midnight, January 1, 1904. Classic Mac OS stores the machine's local wall-clock time with no time zone, so the value is *not* UTC. Zero-allocation struct that avoids converting to `DateTime` during parsing:
 
 - `Value` - Raw timestamp value (seconds since the MacOS epoch)
-- `ToDateTime()` - Converts to `DateTime` (UTC)
+- `ToDateTime()` - Converts to a `DateTime` of `DateTimeKind.Unspecified` holding the wall-clock time (do not call `ToLocalTime()` on it)
+- `FromDateTime(dateTime)` - Local and unspecified values are used as wall-clock time; UTC values are converted to local time first
 - Implicit conversion to `DateTime` for seamless use
 - Implements `IEquatable<MfsTimestamp>`, `IComparable<MfsTimestamp>`, `IFormattable`
+
+## Format notes
+
+The reader aims to behave like the original Macintosh File Manager rather than reject anything unusual, so that one damaged structure doesn't make the rest of a disk unreadable. These behaviours are based on Inside Macintosh Volume II, Apple's published ROM source for the MFS driver, and the [CiderPress II MFS notes](https://ciderpress2.com/formatdoc/MFS-notes.html).
+
+**Reading**
+
+- **Where a volume starts.** `new MfsVolume(stream)` treats the stream's *current position* as the start of the volume. A stream holding a bare disk image must be at position 0. `MfsDisk` handles this for you, including Apple Partition Map partitions.
+- **Directory entries.** Within each 512-byte directory sector, a zero flags byte ends the entries, as in the ROM (which keeps entries packed and zeroes the rest of the sector when a file is deleted). An entry with a non-zero flags byte but without the "entry used" bit (bit 7) is skipped rather than reported.
+- **Hints, not rules.** The file count in the master directory block is a hint (the ROM corrects it when it disagrees with the directory), and the per-entry version byte is preserved in `Version` but never rejected.
+- **Allocation block map.** Entries are 12 bits, numbered from block 2. `0` is free, `1` ends a chain, and `0xFFF` is reserved (it marks blocks that hold the file directory when the directory sits inside the allocation area, which the reader supports). Entry values are only checked when a chain is followed, so a stray value in an unused entry doesn't stop the volume opening. Reading a file whose chain points outside the volume, loops, or ends early throws `InvalidDataException`.
+- **Errors.** A malformed or truncated volume throws `InvalidDataException`. If the stream shrinks after the volume has been opened, the underlying `EndOfStreamException` is surfaced instead.
+
+**Timestamps**
+
+Dates are seconds since midnight, 1 January 1904 in the **local time** of the Mac that wrote them; there is no time zone. `MfsTimestamp.ToDateTime()` therefore returns a `DateTimeKind.Unspecified` value holding that wall-clock time. It is not UTC, so don't call `ToLocalTime()` on it.
+
+**Writing**
+
+- File names must be unique on the volume, ignoring case (`AddFile` throws `ArgumentException` otherwise).
+- A volume can use at most **4093** allocation blocks. Block numbers start at 2 and `0xFFF` is reserved, so the highest usable block is `0xFFE`. Pick a larger `allocationBlockSize` for larger content.
+- Writing with no files produces a valid empty volume.
+- Created and modified times are set to the current local time.
+- The output is exactly as large as its contents. It is not padded to a standard 400K/800K floppy size.
 
 ## Building
 
@@ -237,6 +263,14 @@ Run tests:
 ```sh
 dotnet test
 ```
+
+Collect line and branch coverage with Coverlet:
+
+```sh
+dotnet test --collect:"XPlat Code Coverage" --settings tests/coverlet.runsettings
+```
+
+The Cobertura report is written under `tests/TestResults`.
 
 ## MfsDumper CLI
 
