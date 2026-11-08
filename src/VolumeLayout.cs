@@ -102,9 +102,11 @@ internal readonly record struct VolumeLayout(
         }
     }
 
+    public bool IsValidBlock(ushort block) => block >= 2 && block < (int)AllocationBlockCount + 2;
+
     public long GetAllocationBlockOffset(ushort block)
     {
-        if (block < 2 || block >= (int)AllocationBlockCount + 2)
+        if (!IsValidBlock(block))
         {
             throw new InvalidDataException(
                 $"Allocation block {block} is outside the valid range 2-{AllocationBlockCount + 1}.");

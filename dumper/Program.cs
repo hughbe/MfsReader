@@ -734,6 +734,12 @@ static class VolumeSelection
     /// <returns>The selected volumes, or null (after printing an error) if the index is invalid.</returns>
     public static IReadOnlyList<MfsVolume>? Get(MfsDisk disk, int? volumeIndex)
     {
+        if (disk.Volumes.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]No MFS volumes were found on this disk.[/]");
+            return null;
+        }
+
         if (!volumeIndex.HasValue)
         {
             return disk.Volumes;
