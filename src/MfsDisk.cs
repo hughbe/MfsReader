@@ -8,7 +8,8 @@ namespace MfsReader;
 public class MfsDisk
 {
     /// <summary>
-    /// Gets the list of MFS volumes found on the disk.
+    /// Gets the list of MFS volumes found on the disk. This is empty if the disk has an
+    /// Apple Partition Map that contains no Apple_MFS partitions.
     /// </summary>
     public List<MfsVolume> Volumes { get; } = [];
 
@@ -27,6 +28,9 @@ public class MfsDisk
         // Try to read Apple Partition Map entries first.
         if (ApplePartitionMap.IsApplePartitionMap(stream, 0))
         {
+            // A partitioned disk is described by its map: only Apple_MFS partitions are
+            // volumes. If there are none (for example an HFS-only disk), Volumes stays empty
+            // rather than misreading the start of the disk as an MFS volume.
             var partitionMap = new ApplePartitionMap(stream, 0);
             foreach (var partitionEntry in partitionMap)
             {
@@ -39,13 +43,12 @@ public class MfsDisk
                     Volumes.Add(new MfsVolume(stream, mfsLength));
                 }
             }
+
+            return;
         }
 
-        // If no MFS volumes found, assume the entire image is a single MFS volume.
-        if (Volumes.Count == 0)
-        {
-            stream.Seek(0, SeekOrigin.Begin);
-            Volumes.Add(new MfsVolume(stream));
-        }
+        // Not partitioned: the entire image is a single MFS volume.
+        stream.Seek(0, SeekOrigin.Begin);
+        Volumes.Add(new MfsVolume(stream));
     }
 }

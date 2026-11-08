@@ -150,7 +150,7 @@ writer.WriteTo(stream, volumeName: "My Disk");
 The main class for reading disks that may contain Apple Partition Map entries with MFS partitions.
 
 - `MfsDisk(Stream stream)` - Opens a disk from a stream and scans for MFS volumes
-- `Volumes` - Gets the list of MFS volumes found on the disk
+- `Volumes` - Gets the list of MFS volumes found on the disk (empty if the disk has a partition map with no `Apple_MFS` partition)
 
 ### MfsVolume
 
@@ -232,10 +232,12 @@ The reader aims to behave like the original Macintosh File Manager rather than r
 
 **Reading**
 
-- **Where a volume starts.** `new MfsVolume(stream)` treats the stream's *current position* as the start of the volume. A stream holding a bare disk image must be at position 0. `MfsDisk` handles this for you, including Apple Partition Map partitions.
+- **Where a volume starts.** `new MfsVolume(stream)` treats the stream's *current position* as the start of the volume. A stream holding a bare disk image must be at position 0. `MfsDisk` handles this for you, including Apple Partition Map partitions. If a disk has a partition map but no `Apple_MFS` partition, `MfsDisk.Volumes` is empty (the image is not misread as a bare MFS volume).
 - **Directory entries.** Within each 512-byte directory sector, a zero flags byte ends the entries, as in the ROM (which keeps entries packed and zeroes the rest of the sector when a file is deleted). An entry with a non-zero flags byte but without the "entry used" bit (bit 7) is skipped rather than reported.
 - **Hints, not rules.** The file count in the master directory block is a hint (the ROM corrects it when it disagrees with the directory), and the per-entry version byte is preserved in `Version` but never rejected.
-- **Allocation block map.** Entries are 12 bits, numbered from block 2. `0` is free, `1` ends a chain, and `0xFFF` is reserved (it marks blocks that hold the file directory when the directory sits inside the allocation area, which the reader supports). Entry values are only checked when a chain is followed, so a stray value in an unused entry doesn't stop the volume opening. Reading a file whose chain points outside the volume, loops, or ends early throws `InvalidDataException`.
+- **Allocation block map.** Entries are 12 bits, numbered from block 2. `0` is free, `1` ends a chain, and `0xFFF` is reserved (it marks blocks that hold the file directory when the directory sits inside the allocation area, which the reader supports). Entry values are only checked when a chain is followed, so a stray value in an unused entry doesn't stop the volume opening. Reading a file whose chain points outside the volume, loops, or ends early throws `InvalidDataException`. When streaming a fork to an output stream, the data that precedes the damage has already been written when the exception is thrown, so partial recovery is possible.
+- **Untrusted sizes.** A fork size larger than the volume's whole allocation area is rejected with `InvalidDataException` before any buffer is allocated, so a corrupt directory entry can't make a tiny image request gigabytes.
+- **Reading is fast and thread safe.** Contiguous allocation blocks are read with a single seek and read, and forks are read straight into the result array. Reads from one `MfsVolume` may run on several threads at once; the volume serialises access to the stream, which must not be used elsewhere while the volume is in use.
 - **Errors.** A malformed or truncated volume throws `InvalidDataException`. If the stream shrinks after the volume has been opened, the underlying `EndOfStreamException` is surfaced instead.
 
 **Timestamps**
